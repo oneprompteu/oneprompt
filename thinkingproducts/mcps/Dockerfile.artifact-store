@@ -1,0 +1,11 @@
+FROM python:3.13-slim
+WORKDIR /app
+COPY thinkingproducts/services/artifact_store.py /app/artifact_store.py
+RUN pip install --no-cache-dir fastapi uvicorn
+ENV PYTHONUNBUFFERED=1
+ENV ARTIFACT_STORE_HOST=0.0.0.0
+ENV EXPORT_DIR=/app/exports
+RUN mkdir -p /app/exports
+VOLUME ["/app/exports"]
+EXPOSE 3336
+CMD ["python", "/app/artifact_store.py"]

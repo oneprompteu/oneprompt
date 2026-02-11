@@ -1,0 +1,17 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+COPY thinkingproducts/mcps/chart_mcp.py .
+COPY thinkingproducts/mcps/resources/ /app/resources/
+
+RUN pip install --no-cache-dir fastmcp httpx
+
+ENV PYTHONUNBUFFERED=1
+ENV EXPORT_DIR="/app/exports"
+ENV RESOURCES_DIR="/app/resources"
+ENV CHARTS_MD="/app/resources/CHARTS.md"
+RUN mkdir -p "$EXPORT_DIR"
+VOLUME ["/app/exports"]
+EXPOSE 3334
+
+CMD ["python", "chart_mcp.py"]

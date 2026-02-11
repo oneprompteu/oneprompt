@@ -1,0 +1,94 @@
+site_name: thinking products
+site_url: https://docs.thinkingproducts.io
+site_description: AI agents for data querying, analysis, and chart generation
+site_author: thinkingproducts
+
+repo_name: thinkingproducts
+repo_url: https://github.com/thinkingproducts/thinkingproducts
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+  - Guides:
+    - Configuration: guides/configuration.md
+    - Schema Documentation: guides/schema-docs.md
+    - Chaining Agents: guides/chaining.md
+  - Reference:
+    - Python SDK:
+      - Client: reference/client.md
+      - AgentResult: reference/agent-result.md
+      - ArtifactRef: reference/artifact-ref.md
+      - Config: reference/config.md
+    - REST API: reference/rest-api.md
+    - CLI: reference/cli.md
+  - Architecture: architecture/overview.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/thinkingproducts/thinkingproducts
+  generator: false
+
+copyright: Copyright &copy; 2025 thinking products

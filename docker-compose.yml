@@ -1,0 +1,86 @@
+# ThinkingProducts — Local Development Stack
+# Usage: tp start (or docker compose up)
+
+services:
+  artifact-store:
+    build:
+      context: .
+      dockerfile: thinkingproducts/mcps/Dockerfile.artifact-store
+    ports:
+      - "${TP_ARTIFACT_PORT:-3336}:3336"
+    environment:
+      - ARTIFACT_STORE_TOKEN=${TP_ARTIFACT_TOKEN:-dev-token}
+      - EXPORT_DIR=/app/exports
+    volumes:
+      - tp_exports:/app/exports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3336/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  postgres-mcp:
+    build:
+      context: .
+      dockerfile: thinkingproducts/mcps/Dockerfile.postgres
+    ports:
+      - "${TP_POSTGRES_MCP_PORT:-3333}:3333"
+    environment:
+      - POSTGRES_DSN=${DATABASE_URL}
+      - EXPORT_DIR=/app/exports
+      - ARTIFACT_STORE_URL=http://artifact-store:3336
+      - ARTIFACT_STORE_TOKEN=${TP_ARTIFACT_TOKEN:-dev-token}
+      - DATABASE_MD=/app/resources/DATABASE.md
+    volumes:
+      - tp_exports:/app/exports
+      - ${TP_SCHEMA_DOCS_PATH:-./DATABASE.md}:/app/resources/DATABASE.md:ro
+    depends_on:
+      artifact-store:
+        condition: service_healthy
+
+  chart-mcp:
+    build:
+      context: .
+      dockerfile: thinkingproducts/mcps/Dockerfile.chart
+    ports:
+      - "${TP_CHART_MCP_PORT:-3334}:3334"
+    environment:
+      - EXPORT_DIR=/app/exports
+      - ARTIFACT_STORE_URL=http://artifact-store:3336
+      - ARTIFACT_STORE_TOKEN=${TP_ARTIFACT_TOKEN:-dev-token}
+    volumes:
+      - tp_exports:/app/exports
+    depends_on:
+      artifact-store:
+        condition: service_healthy
+
+  python-mcp:
+    build:
+      context: .
+      dockerfile: thinkingproducts/mcps/Dockerfile.python
+    ports:
+      - "${TP_PYTHON_MCP_PORT:-3335}:3335"
+    environment:
+      - EXPORT_DIR=/app/exports
+      - ARTIFACT_STORE_URL=http://artifact-store:3336
+      - ARTIFACT_STORE_TOKEN=${TP_ARTIFACT_TOKEN:-dev-token}
+    volumes:
+      - tp_exports:/app/exports
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+    depends_on:
+      artifact-store:
+        condition: service_healthy
+
+volumes:
+  tp_exports:

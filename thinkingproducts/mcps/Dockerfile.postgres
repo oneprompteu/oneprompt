@@ -1,0 +1,18 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+COPY thinkingproducts/mcps/postgres_mcp.py .
+COPY thinkingproducts/mcps/resources/ /app/resources/
+
+RUN pip install --no-cache-dir fastmcp psycopg2-binary pandas pyarrow httpx
+
+ENV PYTHONUNBUFFERED=1
+ENV POSTGRES_DSN=""
+ENV EXPORT_DIR="/app/exports"
+ENV RESOURCES_DIR="/app/resources"
+ENV DATABASE_MD="/app/resources/DATABASE.md"
+RUN mkdir -p "$EXPORT_DIR"
+VOLUME ["/app/exports"]
+EXPOSE 3333
+
+CMD ["python", "postgres_mcp.py"]
