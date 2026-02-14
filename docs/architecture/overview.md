@@ -1,14 +1,14 @@
 # Architecture Overview
 
-Technical documentation of the ThinkingProducts system architecture.
+Technical documentation of the oneprompt system architecture.
 
 ## Overview
 
-ThinkingProducts is built as a **local-first SDK** that orchestrates AI agents via Docker-based MCP servers. The system runs entirely on your machine — no cloud services, no external APIs beyond the Gemini LLM.
+oneprompt is built as a **local-first SDK** that orchestrates AI agents via Docker-based MCP servers. The system runs entirely on your machine — no cloud services, no external APIs beyond the Gemini LLM.
 
 ```
 Your Application
-  ├── Python SDK (tp.Client)     or     REST API (tp api)
+  ├── Python SDK (op.Client)     or     REST API (op api)
   │
   ▼
 AI Agents (Gemini + LangChain)
@@ -31,13 +31,13 @@ The `Client` class is the main entry point. It handles:
 - Configuration loading (`.env`, environment variables, or explicit args)
 - Session and run management via local SQLite
 - Agent orchestration (calling the correct agent for each method)
-- Artifact download to local `tp_data/out/` directory
+- On-demand artifact access via the Artifact Store
 
 | File | Purpose |
 |------|---------|
 | `client.py` | `Client` class with `query()`, `chart()`, `analyze()` |
 | `config.py` | `Config` dataclass with all settings |
-| `cli.py` | CLI commands (`tp init`, `tp start`, etc.) |
+| `cli.py` | CLI commands (`op init`, `op start`, etc.) |
 | `api.py` | FastAPI REST API server |
 
 ### AI Agents
@@ -117,7 +117,7 @@ exports/
 
 ### State Store (SQLite)
 
-Local SQLite database for metadata, stored at `tp_data/state.db`:
+Local SQLite database for metadata, stored at `op_data/state.db`:
 
 | Table | Contents |
 |-------|----------|
@@ -150,8 +150,8 @@ Local SQLite database for metadata, stored at `tp_data/state.db`:
    └── Stores files in Artifact Store
 
 4. Client
-   ├── Downloads artifacts from Artifact Store → tp_data/out/
-   ├── Creates ArtifactRef objects with local paths
+   ├── Creates ArtifactRef objects with remote URLs
+   ├── Artifacts are fetched on-demand via read_text() or download()
    └── Returns AgentResult to your code
 ```
 
@@ -163,12 +163,12 @@ query("Revenue by month")
         │  passed via data_from parameter
         ▼
 analyze("Calculate growth rate", data_from=result)
-  └── Reads JSON data from local artifact
+  └── Reads JSON data from artifact (fetched on-demand)
         │  passed via data_from parameter
         ▼
 chart("Line chart of growth", data_from=analysis)
-  └── Reads JSON data from local artifact
-  └── Returns HTML chart file
+  └── Reads JSON data from artifact (fetched on-demand)
+  └── Returns HTML chart artifact
 ```
 
 ---
@@ -218,24 +218,22 @@ async with client.session("postgres") as session:
 
 ## Local Storage
 
-All local data is stored under `tp_data/` (configurable via `TP_DATA_DIR`):
+All local data is stored under `op_data/` (configurable via `OP_DATA_DIR`):
 
 ```
-tp_data/
+op_data/
   ├── state.db          ← SQLite: sessions, runs, artifacts metadata
-  ├── exports/          ← Shared Docker volume for artifact files
-  │   └── {session_id}/
-  │       └── runs/
-  │           └── {run_id}/
-  │               ├── data/
-  │               ├── results/
-  │               └── charts/
-  └── out/              ← Downloaded artifacts (local copies)
+  ├── .artifact_token   ← Auto-generated auth token for Artifact Store
+  └── exports/          ← Shared Docker volume for artifact files
       └── {session_id}/
-          └── {run_id}/
-              ├── top_products.csv
-              └── chart.html
+          └── runs/
+              └── {run_id}/
+                  ├── data/
+                  ├── results/
+                  └── charts/
 ```
+
+Artifacts are stored in the Artifact Store (Docker container). Use `artifact.read_text()` to fetch content on demand, or `artifact.download("./output/")` to save locally.
 
 ---
 
@@ -254,7 +252,7 @@ All MCP servers and the Artifact Store run as Docker containers managed by Docke
 
 ### Shared Volume
 
-All services share a Docker volume (`tp_exports`) mounted at `/app/exports`. This allows:
+All services share a Docker volume (`op_exports`) mounted at `/app/exports`. This allows:
 
 - MCP servers to write output files
 - Artifact Store to serve those files via HTTP

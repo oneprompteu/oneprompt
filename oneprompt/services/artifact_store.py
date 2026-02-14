@@ -23,7 +23,7 @@ BASE_EXPORT_DIR = Path(
 ARTIFACTS_TOKEN = os.getenv("ARTIFACT_STORE_TOKEN") or os.getenv("ARTIFACTS_TOKEN")
 
 app = FastAPI(
-    title="ThinkingProducts Artifact Store",
+    title="oneprompt Artifact Store",
     version="1.0.0",
     description="File storage service for session artifacts",
 )

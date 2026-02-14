@@ -1,5 +1,5 @@
 """
-ThinkingProducts local API server.
+oneprompt local API server.
 
 Simplified FastAPI application for local/self-hosted use.
 No multi-tenant auth, no Firestore — just configure and go.
@@ -20,23 +20,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from thinkingproducts.agents.context import AgentContext
-from thinkingproducts.agents import data_agent, python_agent, chart_agent
-from thinkingproducts.services.artifact_client import ArtifactStoreClient
-from thinkingproducts.services.state_store import StateStore
+from oneprompt.agents.context import AgentContext
+from oneprompt.agents import data_agent, python_agent, chart_agent
+from oneprompt.services.artifact_client import ArtifactStoreClient
+from oneprompt.services.state_store import StateStore
 
 import logging
 
-logger = logging.getLogger("thinkingproducts")
+logger = logging.getLogger("oneprompt")
 
 EXPORT_DIR = Path(
-    os.getenv("EXPORT_DIR", Path(__file__).resolve().parents[2] / "tp_data" / "exports")
+    os.getenv("EXPORT_DIR", Path.cwd() / "op_data" / "exports")
 ).resolve()
 
-store = StateStore()
+_state_db = os.getenv("STATE_DB_PATH") or str(Path.cwd() / "op_data" / "state.db")
+store = StateStore(db_path=_state_db)
 
 app = FastAPI(
-    title="ThinkingProducts API",
+    title="oneprompt API",
     version="1.0.0",
     description="AI agents API for data querying, Python analysis, and chart generation.",
 )
@@ -213,7 +214,7 @@ async def run_data_agent(payload: DataAgentRequest) -> AgentRunResponse:
 
     dataset_config = {
         "dsn": os.getenv("DATABASE_URL", os.getenv("POSTGRES_DSN", "")),
-        "schema_docs": os.getenv("TP_SCHEMA_DOCS", ""),
+        "schema_docs": os.getenv("OP_SCHEMA_DOCS", ""),
         "name": "default",
         "id": "default",
     }
@@ -340,6 +341,6 @@ async def get_artifact(run_id: str, artifact_id: str) -> StreamingResponse:
 if __name__ == "__main__":
     import uvicorn
 
-    host = os.getenv("TP_HOST", "0.0.0.0")
-    port = int(os.getenv("TP_PORT", "8000"))
+    host = os.getenv("OP_HOST", "0.0.0.0")
+    port = int(os.getenv("OP_PORT", "8000"))
     uvicorn.run(app, host=host, port=port)

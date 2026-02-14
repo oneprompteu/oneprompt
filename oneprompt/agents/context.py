@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from thinkingproducts.services.artifact_client import ArtifactStoreClient
+from oneprompt.services.artifact_client import ArtifactStoreClient
 
 
 @dataclass(frozen=True)

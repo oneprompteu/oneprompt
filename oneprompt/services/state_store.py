@@ -29,8 +29,8 @@ class StateStore:
     """
 
     def __init__(self, db_path: Optional[str] = None) -> None:
-        path = db_path or os.getenv("STATE_DB_PATH") or "./tp_data/state.db"
-        self.db_path = Path(path)
+        path = db_path or os.getenv("STATE_DB_PATH") or "./op_data/state.db"
+        self.db_path = Path(path).resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 

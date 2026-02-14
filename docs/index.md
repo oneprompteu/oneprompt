@@ -1,4 +1,4 @@
-# ThinkingProducts
+# oneprompt
 
 **AI agents for data querying, analysis, and chart generation.**
 
@@ -6,14 +6,14 @@ Connect your Gemini API key and PostgreSQL database — query data in natural la
 
 ---
 
-## What is ThinkingProducts?
+## What is oneprompt?
 
-ThinkingProducts is a Python SDK that turns natural language into SQL queries, Python analysis scripts, and interactive charts. It uses Google Gemini as the LLM backbone and runs tool execution in isolated Docker containers via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
+oneprompt is a Python SDK that turns natural language into SQL queries, Python analysis scripts, and interactive charts. It uses Google Gemini as the LLM backbone and runs tool execution in isolated Docker containers via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
 ```python
-import thinkingproducts as tp
+import oneprompt as op
 
-client = tp.Client()
+client = op.Client()
 
 # Ask a question about your data
 result = client.query("What are the top 10 products by revenue?")
@@ -22,7 +22,7 @@ print(result.preview)
 
 # Generate a chart
 chart = client.chart("Bar chart of top products", data_from=result)
-print(f"Chart: {chart.artifacts[0].path}")
+chart.artifacts[0].download("./output/")   # save locally
 
 # Run Python analysis
 stats = client.analyze("Calculate month-over-month growth", data_from=result)

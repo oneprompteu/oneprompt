@@ -1,22 +1,22 @@
 # REST API
 
-The ThinkingProducts local API server provides HTTP endpoints for integration with non-Python applications, frontends, or microservices.
+The oneprompt local API server provides HTTP endpoints for integration with non-Python applications, frontends, or microservices.
 
 ## Starting the API
 
 ```bash
-tp api
+op api
 ```
 
 Options:
 
 ```bash
-tp api --host 0.0.0.0 --port 8000     # Custom host/port
-tp api --no-reload                      # Disable auto-reload
+op api --host 0.0.0.0 --port 8000     # Custom host/port
+op api --no-reload                      # Disable auto-reload
 ```
 
 !!! warning "Prerequisite"
-    The MCP services must be running (`tp start`) before starting the API.
+    The MCP services must be running (`op start`) before starting the API.
 
 ---
 

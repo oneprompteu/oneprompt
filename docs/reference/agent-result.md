@@ -70,10 +70,12 @@ result = client.query("Monthly revenue")
 for artifact in result.artifacts:
     print(f"File: {artifact.name}")
     print(f"Type: {artifact.type}")
-    print(f"Path: {artifact.path}")
 
-# Read artifact content
+# Read content on demand (fetched from the Artifact Store)
 csv_text = result.artifacts[0].read_text()
+
+# Save to a local file
+result.artifacts[0].download("./output/")
 ```
 
 ### Error handling

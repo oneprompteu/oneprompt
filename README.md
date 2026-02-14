@@ -1,4 +1,4 @@
-# 🧠 ThinkingProducts
+# 🧠 oneprompt
 
 > ⚠️ **License Notice**: This project is licensed under the **PolyForm Shield License 1.0.0**.
 > 
@@ -6,14 +6,14 @@
 > ✅ **Free for internal business use**  
 > ❌ **Prohibited to build a competing product or service**
 > 
-> For commercial licenses, OEM integration, or questions: contact@thinkingproducts.com
+> For commercial licenses, OEM integration, or questions: contact@oneprompt.com
 
 **AI agents for data querying, analysis, and chart generation.**
 
 Connect your Gemini API key and PostgreSQL database — query data in natural language, run Python analysis, and generate interactive charts in minutes.
 
-[![PyPI](https://img.shields.io/pypi/v/thinkingproducts)](https://pypi.org/project/thinkingproducts/)
-[![Python](https://img.shields.io/pypi/pyversions/thinkingproducts)](https://pypi.org/project/thinkingproducts/)
+[![PyPI](https://img.shields.io/pypi/v/oneprompt)](https://pypi.org/project/oneprompt/)
+[![Python](https://img.shields.io/pypi/pyversions/oneprompt)](https://pypi.org/project/oneprompt/)
 [![License](https://img.shields.io/badge/license-PolyForm%20Shield-blue.svg)](LICENSE)
 
 ---
@@ -23,7 +23,7 @@ Connect your Gemini API key and PostgreSQL database — query data in natural la
 ### 1. Install
 
 ```bash
-pip install thinkingproducts
+pip install oneprompt
 ```
 
 > **Prerequisite:** [Docker](https://docs.docker.com/get-docker/) must be installed and running.
@@ -31,7 +31,7 @@ pip install thinkingproducts
 ### 2. Initialize a project
 
 ```bash
-tp init
+op init
 ```
 
 This scaffolds your working directory with:
@@ -61,7 +61,7 @@ Edit `DATABASE.md` to describe your tables, columns, and relationships. The more
 ### 5. Start services
 
 ```bash
-tp start
+op start
 ```
 
 This builds and launches 4 Docker containers:
@@ -76,9 +76,9 @@ This builds and launches 4 Docker containers:
 ### 6. Use it!
 
 ```python
-import thinkingproducts as tp
+import oneprompt as op
 
-client = tp.Client()  # Reads from .env automatically
+client = op.Client()  # Reads from .env automatically
 
 # 1. Query your database with natural language
 result = client.query("What are the top 10 products by revenue?")
@@ -109,13 +109,13 @@ python example.py
 The `Client` class is the main entry point. It reads configuration from `.env`, environment variables, or explicit parameters:
 
 ```python
-import thinkingproducts as tp
+import oneprompt as op
 
 # Option A: Read from .env (recommended)
-client = tp.Client()
+client = op.Client()
 
 # Option B: Pass credentials directly
-client = tp.Client(
+client = op.Client(
     gemini_api_key="your-key",
     database_url="postgresql://user:pass@localhost:5432/mydb",
     schema_docs_path="./DATABASE.md",
@@ -189,7 +189,7 @@ chart = client.chart("Line chart with original and smoothed data", data_from=tre
 For integration with non-Python applications, start a local API server:
 
 ```bash
-tp api
+op api
 ```
 
 The API runs at `http://localhost:8000` with these endpoints:
@@ -211,15 +211,15 @@ See [docs/reference/rest-api.md](docs/reference/rest-api.md) for the full API re
 ## 🖥️ CLI Commands
 
 ```bash
-tp init       # Scaffold a new project (.env, DATABASE.md, example.py, docker-compose.yml)
-tp start      # Build and start all MCP services (Docker Compose)
-tp stop       # Stop all services
-tp status     # Check which services are running
-tp logs       # Tail service logs
-tp api        # Start the local REST API server
+op init       # Scaffold a new project (.env, DATABASE.md, example.py, docker-compose.yml)
+op start      # Build and start all MCP services (Docker Compose)
+op stop       # Stop all services
+op status     # Check which services are running
+op logs       # Tail service logs
+op api        # Start the local REST API server
 ```
 
-Run `tp --help` for details, or `tp <command> --help` for command-specific options.
+Run `op --help` for details, or `op <command> --help` for command-specific options.
 
 ---
 
@@ -278,7 +278,7 @@ For best results, describe your database schema in `DATABASE.md`. This gives the
 Then point the client to it:
 
 ```python
-client = tp.Client(schema_docs_path="./DATABASE.md")
+client = op.Client(schema_docs_path="./DATABASE.md")
 ```
 
 See [docs/guides/schema-docs.md](docs/guides/schema-docs.md) for the complete guide and best practices.
@@ -291,21 +291,21 @@ Configuration is loaded in this order (later overrides earlier):
 
 1. `.env` file in the current directory
 2. Environment variables
-3. Arguments passed to `tp.Client()`
+3. Arguments passed to `op.Client()`
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GOOGLE_API_KEY` | Gemini API key | **Required** |
 | `DATABASE_URL` | PostgreSQL connection string | **Required** |
 | `GEMINI_MODEL` | Gemini model name | `gemini-3-flash-preview` |
-| `TP_SCHEMA_DOCS_PATH` | Path to your `DATABASE.md` | `./DATABASE.md` |
-| `TP_DATA_DIR` | Directory for local data/state | `./tp_data` |
-| `TP_PORT` | REST API server port | `8000` |
-| `TP_ARTIFACT_PORT` | Artifact store port | `3336` |
-| `TP_POSTGRES_MCP_PORT` | PostgreSQL MCP port | `3333` |
-| `TP_CHART_MCP_PORT` | Chart MCP port | `3334` |
-| `TP_PYTHON_MCP_PORT` | Python MCP port | `3335` |
-| `TP_MAX_RECURSION` | Max agent iterations | `10` |
+| `OP_SCHEMA_DOCS_PATH` | Path to your `DATABASE.md` | `./DATABASE.md` |
+| `OP_DATA_DIR` | Directory for local data/state | `./op_data` |
+| `OP_PORT` | REST API server port | `8000` |
+| `OP_ARTIFACT_PORT` | Artifact store port | `3336` |
+| `OP_POSTGRES_MCP_PORT` | PostgreSQL MCP port | `3333` |
+| `OP_CHART_MCP_PORT` | Chart MCP port | `3334` |
+| `OP_PYTHON_MCP_PORT` | Python MCP port | `3335` |
+| `OP_MAX_RECURSION` | Max agent iterations | `10` |
 
 See [docs/guides/configuration.md](docs/guides/configuration.md) for the complete reference.
 
@@ -313,7 +313,7 @@ See [docs/guides/configuration.md](docs/guides/configuration.md) for the complet
 
 ## 📚 Documentation
 
-Full documentation is available at [docs.thinkingproducts.com](https://docs.thinkingproducts.com) or in the `docs/` directory:
+Full documentation is available at [docs.oneprompt.com](https://docs.oneprompt.com) or in the `docs/` directory:
 
 | Section | Contents |
 |---------|----------|

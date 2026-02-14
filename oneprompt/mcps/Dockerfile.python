@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir numpy>=2.0.0 pandas>=2.2.0 scipy>=1.13.0 \
     scikit-learn>=1.5.0 statsmodels>=0.14.0 pyarrow>=15.0.0
 RUN pip install --no-cache-dir python-dateutil>=2.8.0 pytz>=2024.1
 
-COPY thinkingproducts/mcps/python_sandbox/ /app/python_mcp/
+COPY oneprompt/mcps/python_sandbox/ /app/python_mcp/
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHON_EXECUTION_TIMEOUT=30

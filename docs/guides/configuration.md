@@ -9,7 +9,7 @@ Settings are loaded in this order (later overrides earlier):
 1. **Default values** built into the SDK
 2. **`.env` file** in the current working directory
 3. **Environment variables** set in your shell
-4. **Arguments** passed directly to `tp.Client()`
+4. **Arguments** passed directly to `op.Client()`
 
 ---
 
@@ -32,43 +32,43 @@ Settings are loaded in this order (later overrides earlier):
 
 | Env Variable | Client Param | Default | Description |
 |-------------|--------------|---------|-------------|
-| `TP_SCHEMA_DOCS_PATH` | `schema_docs_path` | `./DATABASE.md` | Path to your database schema file |
-| `TP_SCHEMA_DOCS` | `schema_docs` | — | Inline schema docs (alternative to file) |
+| `OP_SCHEMA_DOCS_PATH` | `schema_docs_path` | `./DATABASE.md` | Path to your database schema file |
+| `OP_SCHEMA_DOCS` | `schema_docs` | — | Inline schema docs (alternative to file) |
 
 ### Directories
 
 | Env Variable | Client Param | Default | Description |
 |-------------|--------------|---------|-------------|
-| `TP_DATA_DIR` | `data_dir` | `./tp_data` | Directory for local data, state DB, and downloaded artifacts |
+| `OP_DATA_DIR` | `data_dir` | `./op_data` | Directory for local data and state DB. Resolved to an absolute path at init time |
 
 ### Network Ports
 
 | Env Variable | Client Param | Default | Description |
 |-------------|--------------|---------|-------------|
-| `TP_PORT` | `port` | `8000` | REST API server port |
-| `TP_ARTIFACT_PORT` | `artifact_store_port` | `3336` | Artifact Store port |
-| `TP_POSTGRES_MCP_PORT` | `postgres_mcp_port` | `3333` | PostgreSQL MCP server port |
-| `TP_CHART_MCP_PORT` | `chart_mcp_port` | `3334` | Chart MCP server port |
-| `TP_PYTHON_MCP_PORT` | `python_mcp_port` | `3335` | Python MCP server port |
+| `OP_PORT` | `port` | `8000` | REST API server port |
+| `OP_ARTIFACT_PORT` | `artifact_store_port` | `3336` | Artifact Store port |
+| `OP_POSTGRES_MCP_PORT` | `postgres_mcp_port` | `3333` | PostgreSQL MCP server port |
+| `OP_CHART_MCP_PORT` | `chart_mcp_port` | `3334` | Chart MCP server port |
+| `OP_PYTHON_MCP_PORT` | `python_mcp_port` | `3335` | Python MCP server port |
 
 ### Agent Behavior
 
 | Env Variable | Client Param | Default | Description |
 |-------------|--------------|---------|-------------|
-| `TP_MAX_RECURSION` | `agent_max_recursion` | `10` | Maximum iterations per agent invocation |
+| `OP_MAX_RECURSION` | `agent_max_recursion` | `10` | Maximum iterations per agent invocation |
 
 ### Internal
 
 | Env Variable | Client Param | Default | Description |
 |-------------|--------------|---------|-------------|
-| `TP_ARTIFACT_TOKEN` | `artifact_store_token` | Auto-generated | Shared auth token between SDK and Artifact Store |
-| `TP_HOST` | `host` | `0.0.0.0` | API server bind address |
+| `OP_ARTIFACT_TOKEN` | `artifact_store_token` | Auto-generated | Shared auth token between SDK and Artifact Store |
+| `OP_HOST` | `host` | `0.0.0.0` | API server bind address |
 
 ---
 
 ## .env File Example
 
-Create a `.env` file in your project directory (or run `tp init` to generate one):
+Create a `.env` file in your project directory (or run `op init` to generate one):
 
 ```env
 # Required
@@ -77,13 +77,13 @@ DATABASE_URL=postgresql://myuser:mypassword@localhost:5432/mydb
 
 # Optional
 # GEMINI_MODEL=gemini-3-flash-preview
-# TP_SCHEMA_DOCS_PATH=./DATABASE.md
-# TP_DATA_DIR=./tp_data
-# TP_PORT=8000
-# TP_ARTIFACT_PORT=3336
-# TP_POSTGRES_MCP_PORT=3333
-# TP_CHART_MCP_PORT=3334
-# TP_PYTHON_MCP_PORT=3335
+# OP_SCHEMA_DOCS_PATH=./DATABASE.md
+# OP_DATA_DIR=./op_data
+# OP_PORT=8000
+# OP_ARTIFACT_PORT=3336
+# OP_POSTGRES_MCP_PORT=3333
+# OP_CHART_MCP_PORT=3334
+# OP_PYTHON_MCP_PORT=3335
 ```
 
 ---
@@ -93,7 +93,7 @@ DATABASE_URL=postgresql://myuser:mypassword@localhost:5432/mydb
 For advanced control, create a `Config` object explicitly:
 
 ```python
-from thinkingproducts import Client, Config
+from oneprompt import Client, Config
 
 config = Config(
     gemini_api_key="your-key",
@@ -109,7 +109,7 @@ client = Client(config=config)
 Or load from environment:
 
 ```python
-from thinkingproducts import Config
+from oneprompt import Config
 
 config = Config.from_env()
 print(config.gemini_model)       # gemini-3-flash-preview
@@ -139,7 +139,7 @@ The `Config` object provides these derived properties:
 The client validates required settings on initialization. If something is missing, you get a clear error:
 
 ```python
-client = tp.Client()
+client = op.Client()
 # ValueError: Configuration errors:
 #   - gemini_api_key is required (env: GOOGLE_API_KEY)
 #   - database_url is required (env: DATABASE_URL)

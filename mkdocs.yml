@@ -1,10 +1,10 @@
-site_name: thinking products
-site_url: https://docs.thinkingproducts.io
+site_name: oneprompt
+site_url: https://docs.oneprompt.io
 site_description: AI agents for data querying, analysis, and chart generation
-site_author: thinkingproducts
+site_author: oneprompt
 
-repo_name: thinkingproducts
-repo_url: https://github.com/thinkingproducts/thinkingproducts
+repo_name: oneprompt
+repo_url: https://github.com/oneprompt/oneprompt
 
 theme:
   name: material
@@ -88,7 +88,7 @@ markdown_extensions:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/thinkingproducts/thinkingproducts
+      link: https://github.com/oneprompt/oneprompt
   generator: false
 
-copyright: Copyright &copy; 2025 thinking products
+copyright: Copyright &copy; 2025 oneprompt

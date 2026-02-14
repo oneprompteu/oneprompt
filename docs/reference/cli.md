@@ -1,21 +1,21 @@
 # CLI
 
-The `tp` command-line tool manages your ThinkingProducts project: scaffolding, starting/stopping services, and launching the API server.
+The `tp` command-line tool manages your oneprompt project: scaffolding, starting/stopping services, and launching the API server.
 
 ```bash
-tp --help
+op --help
 ```
 
 ---
 
 ## Commands
 
-### `tp init`
+### `op init`
 
-Initialize a new ThinkingProducts project in the current directory.
+Initialize a new oneprompt project in the current directory.
 
 ```bash
-tp init [--dir TARGET_DIR]
+op init [--dir TARGET_DIR]
 ```
 
 | Option | Default | Description |
@@ -36,19 +36,19 @@ Creates the following files:
 
 ---
 
-### `tp start`
+### `op start`
 
 Build and start all MCP servers and the Artifact Store via Docker Compose.
 
 ```bash
-tp start [OPTIONS]
+op start [OPTIONS]
 ```
 
 | Option | Env Variable | Description |
 |--------|-------------|-------------|
 | `--gemini-key` | `GOOGLE_API_KEY` | Gemini API key |
 | `--database-url` | `DATABASE_URL` | PostgreSQL connection string |
-| `--schema` | `TP_SCHEMA_DOCS_PATH` | Path to DATABASE.md |
+| `--schema` | `OP_SCHEMA_DOCS_PATH` | Path to DATABASE.md |
 | `-d / --detach` | — | Run in background (default: yes) |
 | `--no-detach` | — | Run in foreground |
 
@@ -58,13 +58,13 @@ If credentials are not provided via options or environment variables, you will b
 
 ```bash
 # Using .env file (recommended)
-tp start
+op start
 
 # With explicit options
-tp start --gemini-key "your-key" --database-url "postgresql://..."
+op start --gemini-key "your-key" --database-url "postgresql://..."
 
 # Run in foreground to see logs
-tp start --no-detach
+op start --no-detach
 ```
 
 **Services started:**
@@ -78,46 +78,46 @@ tp start --no-detach
 
 ---
 
-### `tp stop`
+### `op stop`
 
 Stop all running Docker services.
 
 ```bash
-tp stop
+op stop
 ```
 
 ---
 
-### `tp status`
+### `op status`
 
 Show the status of all Docker services.
 
 ```bash
-tp status
+op status
 ```
 
 Runs `docker compose ps` to display running containers and their ports.
 
 ---
 
-### `tp logs`
+### `op logs`
 
 Tail the Docker service logs.
 
 ```bash
-tp logs
+op logs
 ```
 
 Shows the last 50 lines and follows new output. Press `Ctrl+C` to stop.
 
 ---
 
-### `tp api`
+### `op api`
 
 Start the local REST API server.
 
 ```bash
-tp api [OPTIONS]
+op api [OPTIONS]
 ```
 
 | Option | Default | Description |
@@ -130,26 +130,26 @@ tp api [OPTIONS]
 
 ```bash
 # Default settings
-tp api
+op api
 
 # Custom port
-tp api --port 9000
+op api --port 9000
 
 # Production mode (no auto-reload)
-tp api --no-reload
+op api --no-reload
 ```
 
 !!! warning "Prerequisite"
-    Run `tp start` before `tp api`. The API server depends on the MCP Docker services.
+    Run `op start` before `op api`. The API server depends on the MCP Docker services.
 
 ---
 
-### `tp --version`
+### `op --version`
 
 Show the installed SDK version.
 
 ```bash
-tp --version
+op --version
 ```
 
 ---
@@ -158,25 +158,25 @@ tp --version
 
 ```bash
 # 1. Set up the project
-tp init
+op init
 
 # 2. Edit configuration
 #    → .env (API key, database URL)
 #    → DATABASE.md (schema documentation)
 
 # 3. Start services
-tp start
+op start
 
 # 4. Verify everything is running
-tp status
+op status
 
 # 5. Use the SDK or start the API
 python example.py    # Python SDK
-tp api               # REST API
+op api               # REST API
 
 # 6. View logs if needed
-tp logs
+op logs
 
 # 7. Stop when done
-tp stop
+op stop
 ```

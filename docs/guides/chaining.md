@@ -1,15 +1,15 @@
 # Chaining Agents
 
-One of the most powerful features of ThinkingProducts is the ability to chain agents together. The output of one agent becomes the input for the next, enabling complex data workflows.
+One of the most powerful features of oneprompt is the ability to chain agents together. The output of one agent becomes the input for the next, enabling complex data workflows.
 
 ## How Chaining Works
 
 Every agent method (`query`, `analyze`, `chart`) returns an `AgentResult`. You can pass this result to the next agent using the `data_from` parameter:
 
 ```python
-import thinkingproducts as tp
+import oneprompt as op
 
-client = tp.Client()
+client = op.Client()
 
 # Step 1: Query data
 data = client.query("Revenue by month for 2025")
@@ -20,7 +20,7 @@ chart = client.chart("Line chart of revenue trend", data_from=data)
 
 Under the hood, the SDK:
 
-1. Reads the JSON artifact from the first result's local file
+1. Fetches the JSON artifact from the first result's Artifact Store URL
 2. Injects the data inline into the next agent's prompt
 3. The next agent processes it with full context
 
@@ -35,7 +35,7 @@ Generate a visualization directly from query results:
 ```python
 data = client.query("Top 10 customers by total spend")
 chart = client.chart("Horizontal bar chart of customer spending", data_from=data)
-print(f"Chart: {chart.artifacts[0].path}")
+chart.artifacts[0].download("./output/")
 ```
 
 ### Query → Analyze
@@ -96,7 +96,7 @@ pie = client.chart("Pie chart of category distribution", data_from=data)
 
 When you pass `data_from`, the SDK looks for data in this order:
 
-1. **JSON artifact file** — Reads the first `.json` artifact from the result's local files
+1. **JSON artifact** — Fetches the first `.json` artifact from the Artifact Store on demand
 2. **Preview data** — Falls back to `result.preview` (first rows returned by the query)
 
 This means the full dataset (not just the preview) is passed when a JSON artifact is available.

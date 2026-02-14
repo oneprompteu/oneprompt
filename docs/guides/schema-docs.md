@@ -18,26 +18,26 @@ Without this context, the agent may guess table/column names incorrectly or writ
 
 ## Quick Start
 
-Run `tp init` to generate a template, then edit `DATABASE.md` in your project directory:
+Run `op init` to generate a template, then edit `DATABASE.md` in your project directory:
 
 ```bash
-tp init
+op init
 # Edit DATABASE.md with your actual schema
 ```
 
 Point the client to it:
 
 ```python
-import thinkingproducts as tp
+import oneprompt as op
 
 # Option A: Auto-detected from ./DATABASE.md
-client = tp.Client()
+client = op.Client()
 
 # Option B: Explicit path
-client = tp.Client(schema_docs_path="./my_schema.md")
+client = op.Client(schema_docs_path="./my_schema.md")
 
 # Option C: Inline string
-client = tp.Client(schema_docs="# Schema\n\n## Tables\n\n### users\n...")
+client = op.Client(schema_docs="# Schema\n\n## Tables\n\n### users\n...")
 ```
 
 ---

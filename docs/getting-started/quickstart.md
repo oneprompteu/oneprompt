@@ -1,11 +1,11 @@
 # Quick Start
 
-Get up and running with ThinkingProducts in 5 minutes.
+Get up and running with oneprompt in 5 minutes.
 
 ## 1. Initialize a project
 
 ```bash
-tp init
+op init
 ```
 
 This creates the following files in your current directory:
@@ -64,7 +64,7 @@ See the [Schema Documentation Guide](../guides/schema-docs.md) for the full reco
 ## 4. Start services
 
 ```bash
-tp start
+op start
 ```
 
 This builds and launches 4 Docker containers:
@@ -77,14 +77,14 @@ This builds and launches 4 Docker containers:
 | Python MCP | 3335 | Sandboxed Python execution |
 
 !!! note "First run"
-    The first `tp start` builds Docker images, which may take a few minutes. Subsequent starts are much faster.
+    The first `op start` builds Docker images, which may take a few minutes. Subsequent starts are much faster.
 
 ## 5. Run your first query
 
 ```python
-import thinkingproducts as tp
+import oneprompt as op
 
-client = tp.Client()  # Reads from .env automatically
+client = op.Client()  # Reads from .env automatically
 
 # Query your database
 result = client.query("What are the top 10 products by revenue?")
@@ -103,16 +103,23 @@ python example.py
 ```python
 # Use the query result as input
 chart = client.chart("Bar chart of top products", data_from=result)
-print(f"Chart saved to: {chart.artifacts[0].path}")
-```
+print(chart.summary)
 
-Open the generated HTML file in your browser to see the interactive chart.
+# Download the chart HTML and open it in your browser
+for art in chart.artifacts:
+    art.download("./output/")
+```
 
 ## 7. Run Python analysis
 
 ```python
 analysis = client.analyze("Calculate descriptive statistics", data_from=result)
 print(analysis.summary)
+
+# Read or download output artifacts
+for art in analysis.artifacts:
+    print(art.read_text())
+    art.download("./output/")
 ```
 
 ## What's next?

@@ -1,9 +1,9 @@
 # Config
 
-The `Config` dataclass holds all ThinkingProducts settings. It can be created from environment variables, a `.env` file, or direct initialization.
+The `Config` dataclass holds all oneprompt settings. It can be created from environment variables, a `.env` file, or direct initialization.
 
 ```python
-from thinkingproducts import Config
+from oneprompt import Config
 
 config = Config.from_env()
 ```
@@ -19,7 +19,7 @@ Config(
     gemini_model: str = "gemini-3-flash-preview",
     schema_docs: str = "",
     schema_docs_path: str = None,
-    data_dir: str = "./tp_data",
+    data_dir: str = "./op_data",
     host: str = "0.0.0.0",
     port: int = 8000,
     artifact_store_port: int = 3336,
@@ -38,17 +38,17 @@ Config(
 | `gemini_api_key` | `str` | `""` | `GOOGLE_API_KEY` | Google Gemini API key |
 | `database_url` | `str` | `""` | `DATABASE_URL` | PostgreSQL connection string |
 | `gemini_model` | `str` | `gemini-3-flash-preview` | `GEMINI_MODEL` | Gemini model name |
-| `schema_docs` | `str` | `""` | `TP_SCHEMA_DOCS` | Inline schema documentation |
-| `schema_docs_path` | `str` | `None` | `TP_SCHEMA_DOCS_PATH` | Path to schema docs file |
-| `data_dir` | `str` | `./tp_data` | `TP_DATA_DIR` | Local data directory |
-| `host` | `str` | `0.0.0.0` | `TP_HOST` | API server bind address |
-| `port` | `int` | `8000` | `TP_PORT` | API server port |
-| `artifact_store_port` | `int` | `3336` | `TP_ARTIFACT_PORT` | Artifact Store port |
-| `postgres_mcp_port` | `int` | `3333` | `TP_POSTGRES_MCP_PORT` | PostgreSQL MCP port |
-| `chart_mcp_port` | `int` | `3334` | `TP_CHART_MCP_PORT` | Chart MCP port |
-| `python_mcp_port` | `int` | `3335` | `TP_PYTHON_MCP_PORT` | Python MCP port |
-| `artifact_store_token` | `str` | `""` | `TP_ARTIFACT_TOKEN` | Shared auth token |
-| `agent_max_recursion` | `int` | `10` | `TP_MAX_RECURSION` | Max agent iterations |
+| `schema_docs` | `str` | `""` | `OP_SCHEMA_DOCS` | Inline schema documentation |
+| `schema_docs_path` | `str` | `None` | `OP_SCHEMA_DOCS_PATH` | Path to schema docs file |
+| `data_dir` | `str` | `./op_data` | `OP_DATA_DIR` | Local data directory |
+| `host` | `str` | `0.0.0.0` | `OP_HOST` | API server bind address |
+| `port` | `int` | `8000` | `OP_PORT` | API server port |
+| `artifact_store_port` | `int` | `3336` | `OP_ARTIFACT_PORT` | Artifact Store port |
+| `postgres_mcp_port` | `int` | `3333` | `OP_POSTGRES_MCP_PORT` | PostgreSQL MCP port |
+| `chart_mcp_port` | `int` | `3334` | `OP_CHART_MCP_PORT` | Chart MCP port |
+| `python_mcp_port` | `int` | `3335` | `OP_PYTHON_MCP_PORT` | Python MCP port |
+| `artifact_store_token` | `str` | `""` | `OP_ARTIFACT_TOKEN` | Shared auth token |
+| `agent_max_recursion` | `int` | `10` | `OP_MAX_RECURSION` | Max agent iterations |
 
 ---
 
@@ -74,7 +74,7 @@ Reads all settings from the corresponding environment variables listed in the pa
 | `mcp_postgres_url` | `str` | `http://localhost:{postgres_mcp_port}/mcp` |
 | `mcp_chart_url` | `str` | `http://localhost:{chart_mcp_port}/mcp` |
 | `mcp_python_url` | `str` | `http://localhost:{python_mcp_port}/mcp` |
-| `export_dir` | `Path` | `{data_dir}/exports` |
+| `export_dir` | `Path` | `{data_dir}/exports` — used by Docker containers for artifact storage |
 | `state_db_path` | `str` | `{data_dir}/state.db` |
 
 ```python
@@ -82,8 +82,8 @@ config = Config.from_env()
 
 print(config.artifact_store_url)  # http://localhost:3336
 print(config.mcp_postgres_url)    # http://localhost:3333/mcp
-print(config.export_dir)          # tp_data/exports
-print(config.state_db_path)       # tp_data/state.db
+print(config.export_dir)          # /absolute/path/op_data/exports
+print(config.state_db_path)       # /absolute/path/op_data/state.db
 ```
 
 ---
@@ -117,6 +117,22 @@ to_env_dict() -> dict[str, str]
 config = Config.from_env()
 env = config.to_env_dict()
 # {"GOOGLE_API_KEY": "...", "DATABASE_URL": "...", ...}
+```
+
+---
+
+## Path Resolution
+
+Relative paths in `data_dir` are resolved to absolute paths at initialization time, based on the current working directory. This ensures consistent behavior regardless of any later changes to the working directory.
+
+```python
+# If cwd is /home/user/project
+config = Config(data_dir="./op_data")
+print(config.data_dir)  # /home/user/project/op_data
+
+# Absolute paths are kept as-is
+config = Config(data_dir="/var/data/tp")
+print(config.data_dir)  # /var/data/tp
 ```
 
 ---

@@ -208,7 +208,7 @@ Required: `GOOGLE_API_KEY`, `DATABASE_URL`. See `config.py` for all options with
 
 ### CLI entry point
 
-The CLI is registered as `op` in `pyproject.toml`:
+The CLI is registered as `tp` in `pyproject.toml`:
 ```toml
 [project.scripts]
 op = "oneprompt.cli:main"

@@ -5,7 +5,6 @@ Uses a LangChain agent with Gemini LLM connected to a Chart MCP server
 to generate chart specifications from data and descriptions.
 """
 
-import asyncio
 from datetime import date
 from pydantic import BaseModel, Field
 import os
@@ -18,10 +17,10 @@ from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from mcp.shared._httpx_utils import create_mcp_http_client
 
-from thinkingproducts.agents.context import AgentContext
+from oneprompt.agents.context import AgentContext
+from oneprompt.agents.llm import create_llm
 
 warnings.filterwarnings(
     "ignore",
@@ -62,7 +61,7 @@ async def run(
     """
     mcp_url = os.environ.get("MCP_CHART_URL")
     if not mcp_url:
-        raise RuntimeError("MCP_CHART_URL must be set (hint: start MCP servers with `tp start`)")
+        raise RuntimeError("MCP_CHART_URL must be set (hint: start MCP servers with `op start`)")
 
     connection: Dict[str, Any] = {
         "transport": "http",
@@ -92,10 +91,7 @@ async def run(
         except Exception:
             charts_context = "Chart guide not available."
 
-        model = ChatGoogleGenerativeAI(
-            model=os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview"),
-            temperature=0,
-        )
+        model = create_llm(temperature=0)
 
         class ChartResponse(BaseModel):
             ok: bool

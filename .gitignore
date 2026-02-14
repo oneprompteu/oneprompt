@@ -2,6 +2,10 @@
 .env
 .env.*
 
+# Cache
+.ruff_cache/
+.cache/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -11,9 +15,10 @@ dist/
 build/
 *.egg
 .venv/
+test/
 
 # Data
-tp_data/
+op_data/
 *.db
 exports/
 
@@ -29,4 +34,7 @@ Thumbs.db
 # Docker
 .docker/
 
+# Other
+app/
+cloud/
 .claude/

@@ -10,24 +10,24 @@
 ## Install the SDK
 
 ```bash
-pip install thinkingproducts
+pip install oneprompt
 ```
 
-This installs the `thinkingproducts` Python package and the `tp` CLI tool.
+This installs the `oneprompt` Python package and the `op` CLI tool.
 
 ### Verify installation
 
 ```bash
-tp --version
+op --version
 ```
 
 ## What gets installed
 
 | Component | Description |
 |-----------|-------------|
-| `thinkingproducts` | Python SDK package |
+| `oneprompt` | Python SDK package |
 | `tp` | CLI tool for project management |
-| Docker images | Built automatically on first `tp start` |
+| Docker images | Built automatically on first `op start` |
 
 ## Next steps
 

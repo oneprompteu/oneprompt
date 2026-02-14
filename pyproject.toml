@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "thinkingproducts"
+name = "oneprompt"
 version = "0.1.0"
 description = "AI agents for data querying, Python analysis, and chart generation."
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.12"
 authors = [
-    { name = "thinking products"},
+    { name = "oneprompt"},
 ]
-keywords = ["ai", "agents", "data-analysis", "charts", "llm", "gemini", "mcp"]
+keywords = ["ai", "agents", "data-analysis", "charts", "llm", "mcp"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -42,6 +42,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+openai = [
+    "langchain-openai>=0.3.0",
+]
+anthropic = [
+    "langchain-anthropic>=0.3.0",
+]
+all-providers = [
+    "oneprompt[openai,anthropic]",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -51,23 +60,23 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/thinkingproducts/thinkingproducts"
-Documentation = "https://github.com/thinkingproducts/thinkingproducts#readme"
-Repository = "https://github.com/thinkingproducts/thinkingproducts"
-Issues = "https://github.com/thinkingproducts/thinkingproducts/issues"
+Homepage = "https://github.com/oneprompt/oneprompt"
+Documentation = "https://github.com/oneprompt/oneprompt#readme"
+Repository = "https://github.com/oneprompt/oneprompt"
+Issues = "https://github.com/oneprompt/oneprompt/issues"
 
 [project.scripts]
-tp = "thinkingproducts.cli:main"
+op = "oneprompt.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["thinkingproducts"]
+packages = ["oneprompt"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "thinkingproducts/**/*.py",
-    "thinkingproducts/**/*.md",
-    "thinkingproducts/mcps/Dockerfile.*",
-    "thinkingproducts/mcps/resources/*",
+    "oneprompt/**/*.py",
+    "oneprompt/**/*.md",
+    "oneprompt/mcps/Dockerfile.*",
+    "oneprompt/mcps/resources/*",
     "docker-compose.yml",
     "README.md",
     "LICENSE",

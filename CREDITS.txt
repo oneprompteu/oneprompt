@@ -6724,11 +6724,11 @@ https://github.com/jd/tenacity
    See the License for the specific language governing permissions and
    limitations under the License.
 
-thinkingproducts
+oneprompt
 0.1.0
 Other/Proprietary License
-ThinkingProducts
-https://github.com/thinkingproducts/thinkingproducts
+oneprompt
+https://github.com/oneprompt/oneprompt
 # PolyForm Shield License 1.0.0
 
 <https://polyformproject.org/licenses/shield/1.0.0>

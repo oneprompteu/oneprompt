@@ -1,11 +1,11 @@
 # Client
 
-The `Client` class is the main entry point for the ThinkingProducts SDK. It orchestrates AI agents, manages sessions, and handles artifact downloads.
+The `Client` class is the main entry point for the oneprompt SDK. It orchestrates AI agents, manages sessions, and provides on-demand access to generated artifacts.
 
 ```python
-import thinkingproducts as tp
+import oneprompt as op
 
-client = tp.Client()
+client = op.Client()
 ```
 
 ---
@@ -18,6 +18,7 @@ Client(
     database_url: str = None,
     schema_docs: str = None,
     schema_docs_path: str = None,
+    data_dir: str = None,
     config: Config = None,
     **kwargs
 )
@@ -31,32 +32,36 @@ Client(
 | `database_url` | `str` | `None` | PostgreSQL connection string. Falls back to `DATABASE_URL` env var |
 | `schema_docs` | `str` | `None` | Inline database schema documentation string |
 | `schema_docs_path` | `str` | `None` | Path to a `DATABASE.md` file with schema docs |
+| `data_dir` | `str` | `None` | Directory for local data and state storage. Defaults to `./op_data` relative to cwd. Resolved to an absolute path at init time |
 | `config` | `Config` | `None` | Full `Config` object (overrides all individual params) |
 | `**kwargs` | | | Additional config parameters passed to `Config` |
 
 ### Initialization Options
 
 ```python
-import thinkingproducts as tp
+import oneprompt as op
 
 # Option A: Read from .env (recommended)
-client = tp.Client()
+client = op.Client()
 
 # Option B: Pass credentials directly
-client = tp.Client(
+client = op.Client(
     gemini_api_key="your-key",
     database_url="postgresql://user:pass@localhost:5432/mydb",
 )
 
 # Option C: With schema docs
-client = tp.Client(
+client = op.Client(
     gemini_api_key="your-key",
     database_url="postgresql://user:pass@localhost:5432/mydb",
     schema_docs_path="./DATABASE.md",
 )
 
-# Option D: Full Config object
-from thinkingproducts import Config
+# Option D: Custom output directory
+client = op.Client(data_dir="./output")
+
+# Option E: Full Config object
+from oneprompt import Config
 
 config = Config(
     gemini_api_key="your-key",
@@ -64,7 +69,7 @@ config = Config(
     gemini_model="gemini-3-flash-preview",
     data_dir="./my_data",
 )
-client = tp.Client(config=config)
+client = op.Client(config=config)
 ```
 
 ### Validation
@@ -72,7 +77,7 @@ client = tp.Client(config=config)
 The client validates required settings on initialization:
 
 ```python
-client = tp.Client()
+client = op.Client()
 # ValueError: Configuration errors:
 #   - gemini_api_key is required (env: GOOGLE_API_KEY)
 #   - database_url is required (env: DATABASE_URL)
@@ -121,9 +126,9 @@ print(result.preview)   # [{"product_name": "Widget Pro", "total_revenue": "4523
 
 # Access the generated files
 for artifact in result.artifacts:
-    print(f"{artifact.name} → {artifact.path}")
-    # top_products.csv → tp_data/out/default_local_user/abc123/top_products.csv
-    # top_products.json → tp_data/out/default_local_user/abc123/top_products.json
+    print(artifact.name)                     # top_products.csv
+    print(artifact.read_text())              # fetch content on demand
+    artifact.download("./output/")           # save locally
 ```
 
 #### How It Works
@@ -133,7 +138,7 @@ for artifact in result.artifacts:
 3. Your `DATABASE.md` schema is passed as context to Gemini
 4. Gemini generates and executes a SQL query
 5. Results are exported to CSV and JSON, stored in the Artifact Store
-6. Artifacts are downloaded locally to `tp_data/out/`
+6. ArtifactRef objects are created with remote URLs for on-demand access
 
 ---
 
@@ -175,7 +180,10 @@ chart = client.chart("Line chart of monthly revenue", data_from=data)
 
 print(chart.ok)                     # True
 print(chart.artifacts[0].name)      # "line_chart.html"
-print(chart.artifacts[0].path)      # "tp_data/out/.../line_chart.html"
+
+# Read or download the chart
+print(chart.artifacts[0].read_text())        # fetch HTML content
+chart.artifacts[0].download("./output/")     # save locally
 
 # With inline data
 chart = client.chart(
@@ -190,11 +198,11 @@ The Chart Agent can generate: bar, line, pie, scatter, area, column, grouped bar
 
 #### How It Works
 
-1. Data from `data_from` is read from the local JSON artifact (or `data_preview` is used)
+1. Data from `data_from` is fetched from the JSON artifact on demand (or `data_preview` is used)
 2. The Chart Agent connects to the Chart MCP server
 3. Gemini generates the chart configuration
 4. The MCP server creates an interactive HTML file with AntV G2Plot
-5. The HTML file is downloaded locally
+5. An ArtifactRef is returned for on-demand access
 
 ---
 
@@ -245,7 +253,8 @@ pivot = client.analyze(
     data_from=data,
     output_name="pivot_table.csv",
 )
-print(pivot.artifacts[0].path)
+print(pivot.artifacts[0].read_text())
+pivot.artifacts[0].download("./output/")
 ```
 
 #### Sandbox Environment
@@ -269,7 +278,7 @@ Access the current configuration:
 client.config  # → Config object
 client.config.gemini_model     # "gemini-3-flash-preview"
 client.config.database_url     # "postgresql://..."
-client.config.data_dir         # "./tp_data"
+client.config.data_dir         # "/absolute/path/to/op_data"
 ```
 
 See [Config](config.md) for the full reference.
