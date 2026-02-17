@@ -1,10 +1,10 @@
 site_name: oneprompt
-site_url: https://docs.oneprompt.io
+site_url: https://docs.oneprompt.eu
 site_description: AI agents for data querying, analysis, and chart generation
 site_author: oneprompt
 
 repo_name: oneprompt
-repo_url: https://github.com/oneprompt/oneprompt
+repo_url: https://github.com/oneprompteu/oneprompt
 
 theme:
   name: material
