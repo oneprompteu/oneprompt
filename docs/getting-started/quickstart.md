@@ -93,6 +93,7 @@ client = Client(config=config)
 result = client.query("What are the top 10 products by revenue?")
 print(result.summary)
 print(result.preview)
+print(result.metrics)   # RunMetrics(duration_ms=..., input_tokens=..., output_tokens=...)
 ```
 
 Or run the generated example:

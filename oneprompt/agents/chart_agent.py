@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from oneprompt.agents.context import AgentContext
 from oneprompt.agents.llm import create_llm
+from oneprompt.agents.metrics import RunMetrics, UsageCallback
 
 warnings.filterwarnings(
     "ignore",
@@ -73,7 +74,7 @@ async def run(
     input_text: str,
     context: AgentContext,
     data_url: Optional[str] = None,
-) -> str:
+) -> tuple[str, RunMetrics]:
     """
     Execute a chart generation request against the Chart MCP server.
 
@@ -85,6 +86,8 @@ async def run(
     Returns:
         JSON string with chart specification.
     """
+    usage_cb = UsageCallback()
+
     mcp_url = os.environ.get("MCP_CHART_URL")
     if not mcp_url:
         raise RuntimeError("MCP_CHART_URL must be set (hint: start MCP servers with `op start`)")
@@ -157,7 +160,7 @@ async def run(
         logger.info("[chart_agent] invoking agent for: %s", message[:120])
         result = await agent.ainvoke(
             {"messages": [HumanMessage(content=message)]},
-            {"recursion_limit": _recursion_limit()},
+            {"recursion_limit": _recursion_limit(), "callbacks": [usage_cb]},
         )
         structured = result.get("structured_response")
         if not structured:
@@ -175,19 +178,19 @@ async def run(
                 ok=False,
                 error={"tool": "agent", "kind": "no_tool_output"},
             )
-            return fallback.model_dump_json()
+            return fallback.model_dump_json(), usage_cb.to_metrics()
 
         if isinstance(structured, ChartResponse):
             logger.info("[chart_agent] ok=%s name=%s", structured.ok, structured.name)
-            return structured.model_dump_json()
+            return structured.model_dump_json(), usage_cb.to_metrics()
         if isinstance(structured, dict):
             resp = ChartResponse(**structured)
             logger.info("[chart_agent] ok=%s name=%s", resp.ok, resp.name)
-            return resp.model_dump_json()
+            return resp.model_dump_json(), usage_cb.to_metrics()
 
         logger.error("[chart_agent] unexpected structured_response type: %s", type(structured))
         fallback = ChartResponse(
             ok=False,
             error={"tool": "agent", "kind": "unexpected_structured_response"},
         )
-        return fallback.model_dump_json()
+        return fallback.model_dump_json(), usage_cb.to_metrics()

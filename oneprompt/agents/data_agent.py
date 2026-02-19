@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from oneprompt.agents.context import AgentContext
 from oneprompt.agents.llm import create_llm
+from oneprompt.agents.metrics import RunMetrics, UsageCallback
 from oneprompt.services.dataset_token import (
     DatasetTokenError,
     create_dataset_token,
@@ -87,7 +88,7 @@ async def run(
     question: str,
     context: AgentContext,
     dataset_config: Optional[Dict[str, Any]] = None,
-) -> str:
+) -> tuple[str, RunMetrics]:
     """
     Execute a natural language question against a PostgreSQL MCP server.
 
@@ -99,6 +100,8 @@ async def run(
     Returns:
         JSON string conforming to DataResponse schema.
     """
+    usage_cb = UsageCallback()
+
     mcp_url = os.environ.get("MCP_POSTGRES_URL")
     if not mcp_url:
         raise RuntimeError("MCP_POSTGRES_URL must be set (hint: start MCP servers with `op start`)")
@@ -199,7 +202,7 @@ async def run(
         logger.info("[data_agent] invoking agent for: %s", question[:120])
         result = await agent.ainvoke(
             {"messages": [HumanMessage(content=question)]},
-            {"recursion_limit": _recursion_limit()},
+            {"recursion_limit": _recursion_limit(), "callbacks": [usage_cb]},
         )
         structured = result.get("structured_response")
         if not structured:
@@ -218,19 +221,19 @@ async def run(
                 ok=False,
                 error={"tool": "agent", "kind": "no_tool_output"},
             )
-            return fallback.model_dump_json()
+            return fallback.model_dump_json(), usage_cb.to_metrics()
 
         if isinstance(structured, DataResponse):
             logger.info("[data_agent] ok=%s", structured.ok)
-            return structured.model_dump_json()
+            return structured.model_dump_json(), usage_cb.to_metrics()
         if isinstance(structured, dict):
             resp = DataResponse(**structured)
             logger.info("[data_agent] ok=%s", resp.ok)
-            return resp.model_dump_json()
+            return resp.model_dump_json(), usage_cb.to_metrics()
 
         logger.error("[data_agent] unexpected structured_response type: %s", type(structured))
         fallback = DataResponse(
             ok=False,
             error={"tool": "agent", "kind": "unexpected_structured_response"},
         )
-        return fallback.model_dump_json()
+        return fallback.model_dump_json(), usage_cb.to_metrics()

@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from oneprompt.agents.context import AgentContext
 from oneprompt.agents.llm import create_llm
+from oneprompt.agents.metrics import RunMetrics, UsageCallback
 
 warnings.filterwarnings(
     "ignore",
@@ -137,7 +138,7 @@ async def run(
     context: AgentContext,
     data_path: Optional[str] = None,
     output_name: Optional[str] = None,
-) -> str:
+) -> tuple[str, RunMetrics]:
     """
     Execute a Python analysis instruction via the Python MCP server.
 
@@ -150,6 +151,8 @@ async def run(
     Returns:
         JSON string conforming to AnalysisResponse schema.
     """
+    usage_cb = UsageCallback()
+
     mcp_url = os.environ.get("MCP_PYTHON_URL")
     if not mcp_url:
         raise RuntimeError("MCP_PYTHON_URL must be set (hint: start MCP servers with `op start`)")
@@ -227,7 +230,7 @@ async def run(
         logger.info("[python_agent] invoking agent for: %s", message[:120])
         result = await agent.ainvoke(
             {"messages": [HumanMessage(content=message)]},
-            {"recursion_limit": _recursion_limit()},
+            {"recursion_limit": _recursion_limit(), "callbacks": [usage_cb]},
         )
         structured = result.get("structured_response")
         if not structured:
@@ -245,19 +248,19 @@ async def run(
                 ok=False,
                 error={"tool": "agent", "kind": "no_tool_output"},
             )
-            return fallback.model_dump_json()
+            return fallback.model_dump_json(), usage_cb.to_metrics()
 
         if isinstance(structured, AnalysisResponse):
             logger.info("[python_agent] ok=%s summary=%s", structured.ok, structured.summary)
-            return structured.model_dump_json()
+            return structured.model_dump_json(), usage_cb.to_metrics()
         if isinstance(structured, dict):
             resp = AnalysisResponse(**structured)
             logger.info("[python_agent] ok=%s summary=%s", resp.ok, resp.summary)
-            return resp.model_dump_json()
+            return resp.model_dump_json(), usage_cb.to_metrics()
 
         logger.error("[python_agent] unexpected structured_response type: %s", type(structured))
         fallback = AnalysisResponse(
             ok=False,
             error={"tool": "agent", "kind": "unexpected_structured_response"},
         )
-        return fallback.model_dump_json()
+        return fallback.model_dump_json(), usage_cb.to_metrics()

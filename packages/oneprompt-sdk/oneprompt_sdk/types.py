@@ -10,6 +10,35 @@ import httpx
 
 
 @dataclass
+class RunMetrics:
+    """Token usage and timing metrics from an agent run."""
+
+    duration_ms: float
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    reasoning_tokens: Optional[int] = None
+    cached_tokens: Optional[int] = None
+    llm_calls: int = 0
+
+    def __repr__(self) -> str:
+        parts = [f"duration_ms={self.duration_ms}"]
+        if self.input_tokens:
+            parts.append(f"input_tokens={self.input_tokens}")
+        if self.output_tokens:
+            parts.append(f"output_tokens={self.output_tokens}")
+        if self.total_tokens:
+            parts.append(f"total_tokens={self.total_tokens}")
+        if self.reasoning_tokens is not None:
+            parts.append(f"reasoning_tokens={self.reasoning_tokens}")
+        if self.cached_tokens is not None:
+            parts.append(f"cached_tokens={self.cached_tokens}")
+        if self.llm_calls:
+            parts.append(f"llm_calls={self.llm_calls}")
+        return f"RunMetrics({', '.join(parts)})"
+
+
+@dataclass
 class ArtifactRef:
     """Reference to a generated artifact (file)."""
 
@@ -74,6 +103,7 @@ class AgentResult:
     summary: Optional[str] = None
     data: Dict[str, Any] = field(default_factory=dict)
     artifacts: List[ArtifactRef] = field(default_factory=list)
+    metrics: Optional[RunMetrics] = None
     error: Optional[str] = None
 
     @property

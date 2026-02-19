@@ -23,14 +23,14 @@ from oneprompt.services.credentials import load_oneprompt_api_key
 
 try:
     from oneprompt_sdk.client import Client as CloudClient
-    from oneprompt_sdk.types import AgentResult, ArtifactRef
+    from oneprompt_sdk.types import AgentResult, ArtifactRef, RunMetrics
 except ImportError:
     # Ensure monorepo source imports work before oneprompt-sdk is published/installed.
     _monorepo_sdk_path = Path(__file__).resolve().parent.parent / "packages" / "oneprompt-sdk"
     if _monorepo_sdk_path.exists() and str(_monorepo_sdk_path) not in sys.path:
         sys.path.insert(0, str(_monorepo_sdk_path))
     from oneprompt_sdk.client import Client as CloudClient
-    from oneprompt_sdk.types import AgentResult, ArtifactRef
+    from oneprompt_sdk.types import AgentResult, ArtifactRef, RunMetrics
 
 # Suppress noisy warnings from Google/LangChain internals
 logging.getLogger("langchain_google_genai._function_utils").setLevel(logging.ERROR)
@@ -250,7 +250,16 @@ class Client:
         return artifacts
 
 
-    def _parse_result(self, result_json: str, run_id: str, session_id: str) -> AgentResult:
+    # Fields redundant with top-level AgentResult fields or internal to Docker containers.
+    _STRIP_FROM_DATA = {"ok", "error", "artifacts", "file_path", "csv_path"}
+
+    def _parse_result(
+        self,
+        result_json: str,
+        run_id: str,
+        session_id: str,
+        metrics: Optional[RunMetrics] = None,
+    ) -> AgentResult:
         """Parse agent JSON response into AgentResult."""
         data = json.loads(result_json)
         raw_artifacts = data.get("artifacts", [])
@@ -258,17 +267,20 @@ class Client:
         if isinstance(raw_artifacts, list):
             parsed_artifacts = [item for item in raw_artifacts if isinstance(item, dict)]
 
+        clean_data = {k: v for k, v in data.items() if k not in self._STRIP_FROM_DATA}
+
         return AgentResult(
             ok=data.get("ok", False),
             run_id=run_id,
             session_id=session_id,
             summary=data.get("summary") or data.get("name"),
-            data=data,
+            data=clean_data,
             artifacts=self._build_artifacts(
                 parsed_artifacts,
                 auth_token=self._config.artifact_store_token or None,
                 base_url=self._config.artifact_store_url,
             ),
+            metrics=metrics,
             error=str(data["error"]) if data.get("error") else None,
         )
 
@@ -410,7 +422,9 @@ class Client:
         from oneprompt.agents import data_agent
 
         try:
-            result_json = await data_agent.run(question, context, dataset_config=dataset_config)
+            result_json, metrics = await data_agent.run(
+                question, context, dataset_config=dataset_config
+            )
         except Exception as exc:
             self._state.update_run_status(run_id, "failed")
             return AgentResult(
@@ -425,7 +439,7 @@ class Client:
                 ),
             )
         self._state.update_run_status(run_id, "completed")
-        return self._parse_result(result_json, run_id, sid)
+        return self._parse_result(result_json, run_id, sid, metrics=metrics)
 
     def chart(
         self,
@@ -513,7 +527,7 @@ class Client:
         from oneprompt.agents import chart_agent
 
         try:
-            result_json = await chart_agent.run(msg, context, data_url=chart_data_url)
+            result_json, metrics = await chart_agent.run(msg, context, data_url=chart_data_url)
         except Exception as exc:
             self._state.update_run_status(run_id, "failed")
             return AgentResult(
@@ -528,7 +542,7 @@ class Client:
                 ),
             )
         self._state.update_run_status(run_id, "completed")
-        return self._parse_result(result_json, run_id, sid)
+        return self._parse_result(result_json, run_id, sid, metrics=metrics)
 
     def analyze(
         self,
@@ -618,7 +632,7 @@ class Client:
         from oneprompt.agents import python_agent
 
         try:
-            result_json = await python_agent.run(
+            result_json, metrics = await python_agent.run(
                 msg, context, data_path=artifact_data_path, output_name=output_name
             )
         except Exception as exc:
@@ -635,7 +649,7 @@ class Client:
                 ),
             )
         self._state.update_run_status(run_id, "completed")
-        return self._parse_result(result_json, run_id, sid)
+        return self._parse_result(result_json, run_id, sid, metrics=metrics)
 
     @property
     def config(self) -> Config:
