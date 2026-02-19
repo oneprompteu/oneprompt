@@ -32,13 +32,12 @@ Creates mode-specific files:
 
 | File | Purpose |
 |------|---------|
-| `.env` | Local mode only. Configuration template with API key and database URL placeholders |
 | `DATABASE.md` | Local mode only. Schema documentation template |
 | `docker-compose.yml` | Local mode only. Docker stack for MCP servers |
 | `example.py` | Ready-to-run example script |
 
 !!! note
-    Existing files are not overwritten. If `.env` already exists, `op init` appends only missing required local keys (`LLM_PROVIDER`, `LLM_API_KEY`, `DATABASE_URL`, `OP_SCHEMA_DOCS_PATH`).
+    Existing files are not overwritten.
     In cloud mode, `op init` runs the equivalent of `op login` and asks for your API key interactively.
 
 ---
@@ -53,22 +52,22 @@ op start [OPTIONS]
 
 | Option | Env Variable | Description |
 |--------|-------------|-------------|
-| `--llm-key` | `LLM_API_KEY` | LLM API key |
-| `--database-url` | `DATABASE_URL` | PostgreSQL connection string |
-| `--schema` | `OP_SCHEMA_DOCS_PATH` | Path to DATABASE.md |
+| `--schema` | `OP_SCHEMA_DOCS_PATH` | Path to DATABASE.md (default: `./DATABASE.md`) |
 | `-d / --detach` | — | Run in background (default: yes) |
 | `--no-detach` | — | Run in foreground |
 
-If credentials are not provided via options or environment variables, you will be prompted interactively.
+LLM credentials and the database URL are **not** required here — set them in your `Config` or `.env` file and they will be picked up by the SDK at runtime.
+
+`op start` automatically generates a secure artifact store token and saves it to `op_data/.artifact_token` so the SDK can authenticate with the Artifact Store.
 
 **Example:**
 
 ```bash
-# Using .env file (recommended)
+# Standard startup (DATABASE.md in current directory)
 op start
 
-# With explicit options
-op start --llm-key "your-key" --database-url "postgresql://..."
+# Point to a schema file in another location
+op start --schema /path/to/DATABASE.md
 
 # Run in foreground to see logs
 op start --no-detach
@@ -82,6 +81,12 @@ op start --no-detach
 | PostgreSQL MCP | 3333 | SQL query execution engine |
 | Chart MCP | 3334 | AntV chart generation |
 | Python MCP | 3335 | Sandboxed Python execution |
+
+!!! tip "Connecting to a local database"
+    If your PostgreSQL is running on your Mac/host machine, use `host.docker.internal` instead of `localhost` in your database URL:
+    ```
+    postgresql://user:pass@host.docker.internal:5432/mydb
+    ```
 
 ---
 
@@ -151,6 +156,16 @@ op api --no-reload
 
 ---
 
+### `op login`
+
+Save your oneprompt cloud API key for cloud mode.
+
+```bash
+op login [--api-key KEY]
+```
+
+---
+
 ### `op --version`
 
 Show the installed SDK version.
@@ -167,9 +182,7 @@ op --version
 # Local mode
 op init --mode local
 
-# 1. Edit configuration
-#    → .env (API key, database URL)
-#    → DATABASE.md (schema documentation)
+# 1. Edit DATABASE.md with your schema documentation
 
 # 2. Start services
 op start

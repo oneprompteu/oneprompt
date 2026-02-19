@@ -8,7 +8,7 @@ Connect your Gemini API key and PostgreSQL database — query data in natural la
 
 ## What is oneprompt?
 
-oneprompt is a Python SDK that turns natural language into SQL queries, Python analysis scripts, and interactive charts. It uses Google Gemini as the LLM backbone and runs tool execution in isolated Docker containers via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
+oneprompt is a Python SDK that turns natural language into SQL queries, Python analysis scripts, and interactive charts. It supports multiple LLM providers (Google Gemini, OpenAI, Anthropic) and runs tool execution in isolated Docker containers via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
 ```python
 import oneprompt as op

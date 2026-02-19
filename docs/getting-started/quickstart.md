@@ -18,25 +18,11 @@ This creates the following files in your current directory (local mode):
 
 | File | Purpose |
 |------|---------|
-| `.env` | Configuration — API key and database URL |
 | `DATABASE.md` | Schema documentation template |
 | `docker-compose.yml` | Docker stack for MCP servers |
 | `example.py` | Ready-to-run example script |
 
-## 2. Configure credentials
-
-Edit `.env` with your API key and database connection:
-
-```env
-LLM_PROVIDER=google
-LLM_API_KEY=your-llm-api-key
-DATABASE_URL=postgresql://user:password@localhost:5432/mydb
-```
-
-!!! tip "Get your API key"
-    Get a free Gemini API key at [Google AI Studio](https://aistudio.google.com/apikey).
-
-## 3. Document your schema
+## 2. Document your schema
 
 Edit `DATABASE.md` to describe your tables, columns, and relationships. The more detail you provide, the better the AI will write SQL queries.
 
@@ -68,7 +54,7 @@ Edit `DATABASE.md` to describe your tables, columns, and relationships. The more
 
 See the [Schema Documentation Guide](../guides/schema-docs.md) for the full recommended format.
 
-## 4. Start services
+## 3. Start services
 
 ```bash
 op start
@@ -86,12 +72,22 @@ This builds and launches 4 Docker containers:
 !!! note "First run"
     The first `op start` builds Docker images, which may take a few minutes. Subsequent starts are much faster.
 
-## 5. Run your first query
+## 4. Run your first query
+
+Configure credentials directly in your script:
 
 ```python
-import oneprompt as op
+from oneprompt import Client, Config
 
-client = op.Client()  # Reads from .env automatically
+config = Config(
+    llm_provider="google",       # "google", "openai", or "anthropic"
+    llm_api_key="your-api-key",
+    # If PostgreSQL runs locally, use host.docker.internal (not localhost)
+    database_url="postgresql://user:password@host.docker.internal:5432/mydb",
+    schema_docs_path="./DATABASE.md",
+)
+
+client = Client(config=config)
 
 # Query your database
 result = client.query("What are the top 10 products by revenue?")
@@ -105,19 +101,24 @@ Or run the generated example:
 python example.py
 ```
 
-## 6. Generate a chart
+!!! tip "Get your API key"
+    - **Google Gemini**: [Google AI Studio](https://aistudio.google.com/apikey)
+    - **OpenAI**: [platform.openai.com](https://platform.openai.com/api-keys)
+    - **Anthropic**: [console.anthropic.com](https://console.anthropic.com/)
+
+## 5. Generate a chart
 
 ```python
 # Use the query result as input
 chart = client.chart("Bar chart of top products", data_from=result)
 print(chart.summary)
 
-# Download the chart HTML and open it in your browser
+# Download the chart and open it in your browser
 for art in chart.artifacts:
     art.download("./output/")
 ```
 
-## 7. Run Python analysis
+## 6. Run Python analysis
 
 ```python
 analysis = client.analyze("Calculate descriptive statistics", data_from=result)

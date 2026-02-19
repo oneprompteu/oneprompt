@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "oneprompt-sdk"
-version = "0.2.0"
+version = "0.1.1"
 description = "Lightweight oneprompt cloud SDK."
 readme = "README.md"
 license = {text = "PolyForm Shield License 1.0.0"}

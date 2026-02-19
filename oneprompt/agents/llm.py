@@ -7,11 +7,15 @@ Supported providers: google, openai, anthropic.
 from __future__ import annotations
 
 import os
+from typing_extensions import Literal
 
 from langchain_core.language_models import BaseChatModel
 
 
-def create_llm(temperature: float = 0) -> BaseChatModel:
+def create_llm(
+    temperature: float = 0,
+    thinking_level: Literal["minimal", "low", "medium", "high"] | None = "high",
+    ) -> BaseChatModel:
     """
     Create a LangChain chat model from environment variables.
 
@@ -19,6 +23,7 @@ def create_llm(temperature: float = 0) -> BaseChatModel:
 
     Args:
         temperature: Sampling temperature (default: 0 for deterministic output).
+        thinking_level: The level of reasoning to use (default: "high").
 
     Returns:
         A LangChain BaseChatModel instance.
@@ -40,6 +45,7 @@ def create_llm(temperature: float = 0) -> BaseChatModel:
             model=model or "gemini-2.5-flash-preview-05-20",
             google_api_key=api_key,
             temperature=temperature,
+            thinking_level=thinking_level,
         )
 
     if provider == "openai":

@@ -117,14 +117,11 @@ def login(api_key: str | None):
     """Save oneprompt cloud API key for cloud mode."""
     path = _save_oneprompt_api_key_interactive(api_key)
     click.echo(f"Saved oneprompt API key to: {path}")
-    click.echo("Cloud mode is enabled. `op start` will skip Docker services.")
+    click.echo("Cloud mode is enabled. Use `oneprompt_sdk.Client(oneprompt_api_key=...)` in your code.")
     click.echo("For cloud-only usage, prefer: pip install oneprompt-sdk")
 
 
 @main.command()
-@click.option("--oneprompt-key", envvar="ONEPROMPT_API_KEY", help="oneprompt cloud API key")
-@click.option("--llm-key", envvar="LLM_API_KEY", help="LLM API key")
-@click.option("--database-url", envvar="DATABASE_URL", help="PostgreSQL connection string")
 @click.option(
     "--schema",
     "schema_path",
@@ -134,32 +131,13 @@ def login(api_key: str | None):
 )
 @click.option("--detach/--no-detach", "-d", default=True, help="Run in background")
 def start(
-    oneprompt_key: str | None,
-    llm_key: str | None,
-    database_url: str | None,
     schema_path: str | None,
     detach: bool,
 ):
-    """Start local MCP services, or no-op when cloud mode is configured."""
+    """Start local MCP services (Docker)."""
     load_dotenv(Path.cwd() / ".env")
-    oneprompt_key = _resolve_oneprompt_api_key(oneprompt_key)
-    if oneprompt_key:
-        click.echo("Cloud mode detected (ONEPROMPT_API_KEY configured).")
-        click.echo("Skipping local Docker startup.")
-        click.echo("Use `oneprompt_sdk.Client(oneprompt_api_key=...)` for cloud-only projects.")
-        return
 
-    llm_key = llm_key or os.environ.get("LLM_API_KEY")
-    database_url = database_url or os.environ.get("DATABASE_URL")
     schema_path = schema_path or os.environ.get("OP_SCHEMA_DOCS_PATH")
-
-    if not llm_key:
-        llm_key = click.prompt("Enter your LLM API key", hide_input=True)
-    if not database_url:
-        database_url = click.prompt(
-            "Enter your PostgreSQL connection string",
-            default="postgresql://user:pass@localhost:5432/mydb",
-        )
 
     # Resolve DATABASE.md path
     if schema_path:
@@ -197,8 +175,6 @@ def start(
     token_file.write_text(artifact_token)
 
     env = os.environ.copy()
-    env["LLM_API_KEY"] = llm_key
-    env["DATABASE_URL"] = database_url
     env["OP_ARTIFACT_TOKEN"] = artifact_token
     env["OP_SCHEMA_DOCS_PATH"] = str(schema_file)
 

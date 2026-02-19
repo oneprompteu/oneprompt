@@ -122,7 +122,7 @@ async def run(
         except Exception:
             charts_context = "Chart guide not available."
 
-        model = create_llm(temperature=0)
+        model = create_llm(temperature=0, thinking_level="low")
 
         class ChartResponse(BaseModel):
             ok: bool
