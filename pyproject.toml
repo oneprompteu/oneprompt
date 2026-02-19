@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "oneprompt"
-version = "0.1.0"
+version = "0.2.0"
 description = "AI agents for data querying, Python analysis, and chart generation."
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -25,7 +25,9 @@ classifiers = [
 ]
 
 dependencies = [
+    "oneprompt-sdk>=0.2.0,<0.3.0",
     "deepagents>=0.3.5",
+    "cryptography>=42.0.0",
     "fastapi>=0.128.0",
     "fastmcp>=2.14.0",
     "httpx>=0.27.2",
@@ -60,16 +62,17 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/oneprompt/oneprompt"
-Documentation = "https://github.com/oneprompt/oneprompt#readme"
-Repository = "https://github.com/oneprompt/oneprompt"
-Issues = "https://github.com/oneprompt/oneprompt/issues"
+Homepage = "https://github.com/oneprompteu/oneprompt"
+Documentation = "https://github.com/oneprompteu/oneprompt#readme"
+Repository = "https://github.com/oneprompteu/oneprompt"
+Issues = "https://github.com/oneprompteu/oneprompt/issues"
 
 [project.scripts]
 op = "oneprompt.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["oneprompt"]
+force-include = { "docker-compose.yml" = "docker-compose.yml" }
 
 [tool.hatch.build.targets.sdist]
 include = [

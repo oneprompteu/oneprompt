@@ -2,13 +2,19 @@
 
 Get up and running with oneprompt in 5 minutes.
 
+!!! tip "Cloud-only setup"
+    For SaaS/cloud usage without Docker, install `oneprompt-sdk` and use `import oneprompt_sdk as op`.
+    Use `oneprompt` + `op start` only for local/self-hosted MCP workflows.
+
 ## 1. Initialize a project
 
 ```bash
 op init
 ```
 
-This creates the following files in your current directory:
+When prompted, choose `0`/`local` for this local quickstart flow.
+
+This creates the following files in your current directory (local mode):
 
 | File | Purpose |
 |------|---------|
@@ -22,7 +28,8 @@ This creates the following files in your current directory:
 Edit `.env` with your API key and database connection:
 
 ```env
-GOOGLE_API_KEY=your-gemini-api-key
+LLM_PROVIDER=google
+LLM_API_KEY=your-llm-api-key
 DATABASE_URL=postgresql://user:password@localhost:5432/mydb
 ```
 

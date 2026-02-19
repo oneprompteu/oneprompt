@@ -68,7 +68,7 @@ Settings are loaded in this order (later overrides earlier):
 
 ## .env File Example
 
-Create a `.env` file in your project directory (or run `op init` to generate one):
+Create a `.env` file in your project directory (or run `op init` and choose `local` mode):
 
 ```env
 # Required

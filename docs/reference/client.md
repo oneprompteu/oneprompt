@@ -95,6 +95,9 @@ Query your PostgreSQL database using natural language.
 query(
     question: str,
     session_id: str = None,
+    dataset_id: str = None,
+    database_url: str = None,
+    schema_docs: str = None,
 ) -> AgentResult
 ```
 
@@ -104,6 +107,9 @@ query(
 |-----------|------|----------|-------------|
 | `question` | `str` | ✅ | Natural language question about your data |
 | `session_id` | `str` | ❌ | Session ID for grouping related runs. Auto-created if omitted |
+| `dataset_id` | `str` | ❌ | **Cloud mode only.** Use a stored dataset by ID |
+| `database_url` | `str` | ❌ | DSN override. In cloud mode this uses an ephemeral (non-persistent) dataset |
+| `schema_docs` | `str` | ❌ | Optional schema docs override (used with `database_url`) |
 
 #### Returns
 
@@ -130,6 +136,33 @@ for artifact in result.artifacts:
     print(artifact.read_text())              # fetch content on demand
     artifact.download("./output/")           # save locally
 ```
+
+#### Cloud Mode Dataset Selection
+
+In cloud mode, each `query()` must choose exactly one dataset source:
+
+1. Stored dataset:
+```python
+result = client.query(
+    "Top 10 products by revenue",
+    dataset_id="ds_123456",
+)
+```
+
+2. Ephemeral dataset (no credential persistence):
+```python
+result = client.query(
+    "Top 10 products by revenue",
+    database_url="postgresql://user:pass@host:5432/db",
+    schema_docs="# Optional inline schema docs",
+)
+```
+
+Rules:
+
+- `dataset_id` and `database_url` are mutually exclusive.
+- `schema_docs` with `dataset_id` is rejected in cloud mode.
+- In local mode, `dataset_id` is ignored/rejected (no cloud dataset registry).
 
 #### How It Works
 

@@ -3,11 +3,20 @@
 ## Requirements
 
 - **Python 3.12** or higher
-- **Docker** — must be installed and running ([Get Docker](https://docs.docker.com/get-docker/))
-- **Google Gemini API key** — free at [Google AI Studio](https://aistudio.google.com/apikey)
-- **PostgreSQL database** — any accessible PostgreSQL instance
+- **oneprompt API key** for cloud mode (`ONEPROMPT_API_KEY`)
+- **Docker** — only required for local/full mode ([Get Docker](https://docs.docker.com/get-docker/))
 
 ## Install the SDK
+
+### Cloud-only (recommended for SaaS)
+
+```bash
+pip install oneprompt-sdk
+```
+
+Use `import oneprompt_sdk as op` and call the hosted API directly.
+
+### Full local stack
 
 ```bash
 pip install oneprompt
@@ -25,8 +34,8 @@ op --version
 
 | Component | Description |
 |-----------|-------------|
-| `oneprompt` | Python SDK package |
-| `tp` | CLI tool for project management |
+| `oneprompt` | Full Python SDK package |
+| `op` | CLI tool for project management |
 | Docker images | Built automatically on first `op start` |
 
 ## Next steps

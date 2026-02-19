@@ -6,30 +6,55 @@ that provides a secure sandbox for running data analysis code.
 """
 
 import json
-from datetime import date
+import logging
 import os
+import warnings
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import warnings
 
+logger = logging.getLogger(__name__)
+
+import httpx
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ProviderStrategy
+from langchain_core.messages import HumanMessage
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.interceptors import MCPToolCallRequest
+from langchain_mcp_adapters.tools import load_mcp_tools
+from mcp.shared._httpx_utils import MCP_DEFAULT_SSE_READ_TIMEOUT, MCP_DEFAULT_TIMEOUT
+from mcp.types import CallToolResult, TextContent
 from pydantic import BaseModel, Field
 
 from oneprompt.agents.context import AgentContext
 from oneprompt.agents.llm import create_llm
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.interceptors import MCPToolCallRequest
-from langchain_mcp_adapters.tools import load_mcp_tools
-from langchain.agents import create_agent
-from langchain.agents.structured_output import ProviderStrategy
-from langchain_core.messages import HumanMessage
-from mcp.shared._httpx_utils import create_mcp_http_client
-from mcp.types import CallToolResult, TextContent
-
 warnings.filterwarnings(
     "ignore",
     message="Key 'additionalProperties' is not supported in schema, ignoring",
 )
+
+
+def _create_mcp_http_client(
+    headers: Optional[dict[str, str]] = None,
+    timeout: Optional[httpx.Timeout] = None,
+    auth: Optional[httpx.Auth] = None,
+) -> httpx.AsyncClient:
+    """Create MCP HTTP client for local services without env proxy inheritance."""
+    resolved_timeout = timeout or httpx.Timeout(
+        MCP_DEFAULT_TIMEOUT,
+        read=MCP_DEFAULT_SSE_READ_TIMEOUT,
+    )
+    kwargs: dict[str, Any] = {
+        "follow_redirects": True,
+        "timeout": resolved_timeout,
+        "trust_env": False,
+    }
+    if headers is not None:
+        kwargs["headers"] = headers
+    if auth is not None:
+        kwargs["auth"] = auth
+    return httpx.AsyncClient(**kwargs)
 
 
 def _recursion_limit() -> int:
@@ -76,7 +101,10 @@ async def _tool_output_interceptor(request: MCPToolCallRequest, handler):
         for block in result.content:
             if isinstance(block, TextContent):
                 trimmed_content.append(
-                    TextContent(type="text", text=_truncate_text(block.text, MAX_TOOL_TEXT_CHARS) or "")
+                    TextContent(
+                        type="text",
+                        text=_truncate_text(block.text, MAX_TOOL_TEXT_CHARS) or "",
+                    )
                 )
             else:
                 trimmed_content.append(block)
@@ -126,20 +154,25 @@ async def run(
     if not mcp_url:
         raise RuntimeError("MCP_PYTHON_URL must be set (hint: start MCP servers with `op start`)")
 
+    headers: Dict[str, str] = {
+        "mcp-session-id": context.session_id,
+        "mcp-run-id": context.run_id,
+    }
+    mcp_auth_token = os.getenv("MCP_AUTH_TOKEN") or os.getenv("MCP_SHARED_TOKEN")
+    if mcp_auth_token:
+        headers["x-mcp-auth"] = mcp_auth_token
+
     connection: Dict[str, Any] = {
         "transport": "http",
         "url": mcp_url,
-        "headers": {
-            "mcp-session-id": context.session_id,
-            "mcp-run-id": context.run_id,
-        },
+        "headers": headers,
     }
 
     def _httpx_factory(headers=None, timeout=None, auth=None):
         merged = dict(headers or {})
-        merged.setdefault("mcp-session-id", context.session_id)
-        merged.setdefault("mcp-run-id", context.run_id)
-        return create_mcp_http_client(headers=merged, timeout=timeout, auth=auth)
+        for key, value in connection["headers"].items():
+            merged.setdefault(key, value)
+        return _create_mcp_http_client(headers=merged, timeout=timeout, auth=auth)
 
     connection["httpx_client_factory"] = _httpx_factory
 
@@ -191,12 +224,23 @@ async def run(
             output_url = context.artifact_store.build_upload_url(output_path)
             message += f"\nOUTPUT_URL: {output_url}"
 
+        logger.info("[python_agent] invoking agent for: %s", message[:120])
         result = await agent.ainvoke(
             {"messages": [HumanMessage(content=message)]},
             {"recursion_limit": _recursion_limit()},
         )
         structured = result.get("structured_response")
         if not structured:
+            messages = result.get("messages", [])
+            if messages:
+                last = messages[-1]
+                content = getattr(last, "content", "")
+                logger.error(
+                    "[python_agent] no structured_response. Last message: %s",
+                    str(content)[:500],
+                )
+            else:
+                logger.error("[python_agent] no structured_response and no messages in result")
             fallback = AnalysisResponse(
                 ok=False,
                 error={"tool": "agent", "kind": "no_tool_output"},
@@ -204,11 +248,14 @@ async def run(
             return fallback.model_dump_json()
 
         if isinstance(structured, AnalysisResponse):
+            logger.info("[python_agent] ok=%s summary=%s", structured.ok, structured.summary)
             return structured.model_dump_json()
         if isinstance(structured, dict):
             resp = AnalysisResponse(**structured)
+            logger.info("[python_agent] ok=%s summary=%s", resp.ok, resp.summary)
             return resp.model_dump_json()
 
+        logger.error("[python_agent] unexpected structured_response type: %s", type(structured))
         fallback = AnalysisResponse(
             ok=False,
             error={"tool": "agent", "kind": "unexpected_structured_response"},

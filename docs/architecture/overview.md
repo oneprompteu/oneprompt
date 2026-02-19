@@ -67,7 +67,7 @@ Each agent:
 | `export_query` | Execute SQL and export to CSV/JSON |
 | `get_tables` | List available tables |
 
-The database connection string (DSN) is passed dynamically via HTTP headers, allowing the same MCP server to query different databases.
+The dataset connection is passed dynamically via HTTP headers. When `DATASET_TOKEN_SECRET` is configured, the Data Agent sends an encrypted `x-dataset-token` instead of plaintext DSN.
 
 ### Python MCP Server
 
@@ -203,7 +203,7 @@ client = MultiServerMCPClient({
         "headers": {
             "mcp-session-id": "session_abc",
             "mcp-run-id": "run_xyz",
-            "x-dataset-dsn": "postgresql://...",
+            "x-dataset-token": "<encrypted-token>",
         }
     }
 })

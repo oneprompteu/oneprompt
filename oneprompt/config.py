@@ -30,6 +30,7 @@ class Config:
         database_url: PostgreSQL connection string (env: DATABASE_URL)
         schema_docs: SQL schema documentation for LLM context (optional)
         data_dir: Directory for local data storage (env: OP_DATA_DIR, default: ./op_data)
+        local_host: Host for local services (env: OP_LOCAL_HOST, default: 127.0.0.1)
         host: API host (env: OP_HOST, default: 0.0.0.0)
         port: API port (env: OP_PORT, default: 8000)
         artifact_store_port: Artifact store port (env: OP_ARTIFACT_PORT, default: 3336)
@@ -57,6 +58,9 @@ class Config:
     # Directories
     data_dir: str = "./op_data"
 
+    # Local services host
+    local_host: str = "127.0.0.1"
+
     # Network
     host: str = "0.0.0.0"
     port: int = 8000
@@ -77,9 +81,9 @@ class Config:
     def __post_init__(self) -> None:
         """Resolve relative paths, apply defaults, and load schema docs."""
         self._DEFAULT_MODELS = {
-            "google": "gemini-2.5-flash-preview-05-20",
-            "openai": "gpt-4o",
-            "anthropic": "claude-sonnet-4-20250514",
+            "google": "gemini-3-flash-preview",
+            "openai": "gpt-5",
+            "anthropic": "claude-sonnet-4.5",
         }
 
         self.oneprompt_api_key = self.oneprompt_api_key.strip()
@@ -90,6 +94,7 @@ class Config:
 
         # Resolve data_dir to absolute path
         self.data_dir = str(Path(self.data_dir).resolve())
+        self.local_host = self.local_host.strip() or "127.0.0.1"
 
         if self.schema_docs_path and not self.schema_docs:
             path = Path(self.schema_docs_path)
@@ -111,6 +116,7 @@ class Config:
             OP_SCHEMA_DOCS: Inline schema documentation
             OP_SCHEMA_DOCS_PATH: Path to schema docs file (DATABASE.md)
             OP_DATA_DIR: Data directory (default: ./op_data)
+            OP_LOCAL_HOST: Host for local services (default: 127.0.0.1)
             OP_HOST: API host (default: 0.0.0.0)
             OP_PORT: API port (default: 8000)
             OP_ARTIFACT_PORT: Artifact store port (default: 3336)
@@ -134,6 +140,7 @@ class Config:
             schema_docs=os.getenv("OP_SCHEMA_DOCS", ""),
             schema_docs_path=os.getenv("OP_SCHEMA_DOCS_PATH"),
             data_dir=os.getenv("OP_DATA_DIR", "./op_data"),
+            local_host=os.getenv("OP_LOCAL_HOST", "127.0.0.1"),
             host=os.getenv("OP_HOST", "0.0.0.0"),
             port=int(os.getenv("OP_PORT", "8000")),
             artifact_store_port=int(os.getenv("OP_ARTIFACT_PORT", "3336")),
@@ -146,19 +153,19 @@ class Config:
 
     @property
     def artifact_store_url(self) -> str:
-        return f"http://localhost:{self.artifact_store_port}"
+        return f"http://{self.local_host}:{self.artifact_store_port}"
 
     @property
     def mcp_postgres_url(self) -> str:
-        return f"http://localhost:{self.postgres_mcp_port}/mcp"
+        return f"http://{self.local_host}:{self.postgres_mcp_port}/mcp"
 
     @property
     def mcp_chart_url(self) -> str:
-        return f"http://localhost:{self.chart_mcp_port}/mcp"
+        return f"http://{self.local_host}:{self.chart_mcp_port}/mcp"
 
     @property
     def mcp_python_url(self) -> str:
-        return f"http://localhost:{self.python_mcp_port}/mcp"
+        return f"http://{self.local_host}:{self.python_mcp_port}/mcp"
 
     @property
     def export_dir(self) -> Path:

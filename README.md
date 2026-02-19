@@ -10,7 +10,7 @@
 
 **AI agents for data querying, analysis, and chart generation.**
 
-Connect your Gemini API key and PostgreSQL database — query data in natural language, run Python analysis, and generate interactive charts in minutes.
+Connect your LLM API key and PostgreSQL database — query data in natural language, run Python analysis, and generate interactive charts in minutes.
 
 [![PyPI](https://img.shields.io/pypi/v/oneprompt)](https://pypi.org/project/oneprompt/)
 [![Python](https://img.shields.io/pypi/pyversions/oneprompt)](https://pypi.org/project/oneprompt/)
@@ -22,17 +22,32 @@ Connect your Gemini API key and PostgreSQL database — query data in natural la
 
 ### 1. Install
 
+Choose the package based on your runtime:
+
+| Use case | Package | Includes |
+|------|---------|---------|
+| Cloud-only SaaS integration | `oneprompt-sdk` | Lightweight HTTP client (`oneprompt_sdk`) |
+| Local/self-hosted MCP stack | `oneprompt` | Full SDK + `op` CLI + Docker workflow |
+
+```bash
+pip install oneprompt-sdk
+```
+
+or:
+
 ```bash
 pip install oneprompt
 ```
 
-> **Prerequisite:** [Docker](https://docs.docker.com/get-docker/) must be installed and running.
+> **Prerequisite for `oneprompt` (full/local only):** [Docker](https://docs.docker.com/get-docker/) must be installed and running.
 
 ### 2. Initialize a project
 
 ```bash
 op init
 ```
+
+When prompted, choose `0`/`local` for this local Docker quickstart.
 
 This scaffolds your working directory with:
 
@@ -48,7 +63,8 @@ This scaffolds your working directory with:
 Edit `.env` with your credentials:
 
 ```env
-GOOGLE_API_KEY=your-gemini-api-key
+LLM_PROVIDER=google
+LLM_API_KEY=your-llm-api-key
 DATABASE_URL=postgresql://user:pass@localhost:5432/mydb
 ```
 
@@ -100,6 +116,16 @@ Or run the generated example directly:
 python example.py
 ```
 
+### Cloud-only quickstart (no Docker)
+
+```python
+import oneprompt_sdk as op
+
+client = op.Client(oneprompt_api_key="op_live_...")
+result = client.query("Top products by revenue", dataset_id="ds_123")
+print(result.summary)
+```
+
 ---
 
 ## 📖 Python SDK
@@ -116,19 +142,49 @@ client = op.Client()
 
 # Option B: Pass credentials directly
 client = op.Client(
-    gemini_api_key="your-key",
+    llm_api_key="your-key",
     database_url="postgresql://user:pass@localhost:5432/mydb",
     schema_docs_path="./DATABASE.md",
 )
+```
+
+Cloud-only SDK:
+
+```python
+import oneprompt_sdk as op
+
+client = op.Client(oneprompt_api_key="op_live_...")
 ```
 
 ### Three core methods
 
 | Method | Description | Returns |
 |--------|-------------|---------|
-| `client.query(question)` | Query your database with natural language | `AgentResult` — SQL results + preview data |
+| `client.query(question, ...)` | Query your database with natural language | `AgentResult` — SQL results + preview data |
 | `client.chart(description, data_from=...)` | Generate an interactive AntV chart | `AgentResult` — HTML chart file |
 | `client.analyze(instruction, data_from=...)` | Run Python analysis code | `AgentResult` — analysis results + output files |
+
+### Cloud Dataset Selection
+
+When using cloud mode (`ONEPROMPT_API_KEY` set), `query()` supports two dataset sources:
+
+```python
+# 1) Stored dataset
+result = client.query("Top products by revenue", dataset_id="ds_123")
+
+# 2) Ephemeral dataset (no credential persistence)
+result = client.query(
+    "Top products by revenue",
+    database_url="postgresql://user:pass@host:5432/db",
+    schema_docs="# optional schema docs",
+)
+```
+
+Rules:
+
+- Use exactly one of `dataset_id` or `database_url`.
+- `schema_docs` is supported with `database_url` in cloud mode.
+- Local mode continues to use your configured `DATABASE_URL`.
 
 ### `AgentResult`
 
@@ -295,9 +351,9 @@ Configuration is loaded in this order (later overrides earlier):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GOOGLE_API_KEY` | Gemini API key | **Required** |
+| `LLM_API_KEY` | LLM provider API key | **Required** |
 | `DATABASE_URL` | PostgreSQL connection string | **Required** |
-| `GEMINI_MODEL` | Gemini model name | `gemini-3-flash-preview` |
+| `LLM_MODEL` | Provider model name | provider default |
 | `OP_SCHEMA_DOCS_PATH` | Path to your `DATABASE.md` | `./DATABASE.md` |
 | `OP_DATA_DIR` | Directory for local data/state | `./op_data` |
 | `OP_PORT` | REST API server port | `8000` |
@@ -306,6 +362,15 @@ Configuration is loaded in this order (later overrides earlier):
 | `OP_CHART_MCP_PORT` | Chart MCP port | `3334` |
 | `OP_PYTHON_MCP_PORT` | Python MCP port | `3335` |
 | `OP_MAX_RECURSION` | Max agent iterations | `10` |
+| `DATASET_TOKEN_SECRET` | Shared secret to encrypt dataset tokens between Data Agent and Postgres MCP | _unset_ |
+| `DATASET_TOKEN_TTL_SECONDS` | TTL for encrypted dataset tokens | `900` |
+| `MCP_AUTH_TOKEN` | Optional shared token for internal MCP auth | _unset_ |
+| `POSTGRES_ALLOWED_HOSTS` | Comma-separated DSN host allowlist (optional hardening) | _unset_ |
+| `POSTGRES_ALLOW_PRIVATE_HOSTS` | Allow private/local DSN hosts | `true` |
+| `POSTGRES_BLOCK_METADATA_HOSTS` | Block cloud metadata endpoints from DSN | `true` |
+| `POSTGRES_CONNECT_TIMEOUT_SEC` | PostgreSQL connection timeout | `10` |
+| `POSTGRES_QUERY_TIMEOUT_MS` | SQL statement timeout | `30000` |
+| `POSTGRES_EXPORT_MAX_ROWS` | Max rows exported per query (`0` = no cap) | `0` |
 
 See [docs/guides/configuration.md](docs/guides/configuration.md) for the complete reference.
 
