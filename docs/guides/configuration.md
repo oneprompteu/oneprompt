@@ -15,10 +15,40 @@ Settings are loaded in this order (later overrides earlier):
 
 ## Required Settings
 
+These settings are required in **local mode** (self-hosted with Docker):
+
 | Setting | Env Variable | Client Param | Description |
 |---------|-------------|--------------|-------------|
 | LLM API Key | `LLM_API_KEY` | `llm_api_key` | API key for your chosen LLM provider |
 | Database URL | `DATABASE_URL` | `database_url` | PostgreSQL connection string, e.g. `postgresql://user:pass@host:5432/dbname` |
+
+## Cloud Mode Settings
+
+When using **cloud mode** (`oneprompt-sdk`), the following are required instead:
+
+| Setting | Env Variable | Client Param | Description |
+|---------|-------------|--------------|-------------|
+| oneprompt API Key | `ONEPROMPT_API_KEY` | `oneprompt_api_key` | Your oneprompt cloud API key. Auto-loaded from credentials saved by `op login` |
+| oneprompt API URL | `ONEPROMPT_API_URL` | `oneprompt_api_url` | Base URL of the oneprompt cloud API |
+
+The API key is resolved in this order:
+
+1. `oneprompt_api_key` argument to `Client()` or `Config()`
+2. `ONEPROMPT_API_KEY` environment variable
+3. Credentials saved by `op login` (`~/.config/oneprompt/credentials`)
+
+The API URL is resolved in this order:
+
+1. `oneprompt_api_url` argument to `Client()` or `Config()`
+2. `ONEPROMPT_API_URL` environment variable
+
+Neither has a built-in default — you must supply one of the above.
+
+```env
+# .env (cloud mode)
+ONEPROMPT_API_KEY=op_live_...
+ONEPROMPT_API_URL=https://api.oneprompt.eu
+```
 
 ## Optional Settings
 
@@ -27,7 +57,7 @@ Settings are loaded in this order (later overrides earlier):
 | Env Variable | Client Param | Default | Description |
 |-------------|--------------|---------|-------------|
 | `LLM_PROVIDER` | `llm_provider` | `google` | LLM provider: `google`, `openai`, or `anthropic` |
-| `LLM_MODEL` | `llm_model` | provider default | Model name (defaults: `gemini-3-flash-preview`, `gpt-5`, `claude-sonnet-4.5`) |
+| `LLM_MODEL` | `llm_model` | provider default | Model name (defaults: `gemini-3-flash-preview-preview`, `gpt-5`, `claude-sonnet-4.5`) |
 
 ### Schema Documentation
 
@@ -67,7 +97,9 @@ Settings are loaded in this order (later overrides earlier):
 
 ---
 
-## .env File Example
+## .env File Examples
+
+### Local mode
 
 ```env
 # LLM provider (google, openai, or anthropic)
@@ -79,7 +111,7 @@ LLM_API_KEY=your-api-key-here
 DATABASE_URL=postgresql://user:password@host.docker.internal:5432/mydb
 
 # Optional
-# LLM_MODEL=gemini-3-flash-preview
+# LLM_MODEL=gemini-3-flash-preview-preview
 # OP_SCHEMA_DOCS_PATH=./DATABASE.md
 # OP_DATA_DIR=./op_data
 # OP_PORT=8000
@@ -87,6 +119,17 @@ DATABASE_URL=postgresql://user:password@host.docker.internal:5432/mydb
 # OP_POSTGRES_MCP_PORT=3333
 # OP_CHART_MCP_PORT=3334
 # OP_PYTHON_MCP_PORT=3335
+```
+
+### Cloud mode
+
+```env
+# oneprompt cloud credentials (required)
+ONEPROMPT_API_KEY=op_live_...
+ONEPROMPT_API_URL=https://api.oneprompt.eu
+
+# Default database for ephemeral queries (optional)
+# DATABASE_URL=postgresql://user:password@host:5432/mydb
 ```
 
 ---
@@ -101,7 +144,7 @@ from oneprompt import Client, Config
 config = Config(
     llm_provider="google",                # "google", "openai", or "anthropic"
     llm_api_key="your-key",
-    llm_model="gemini-3-flash-preview",   # optional, uses provider default if omitted
+    llm_model="gemini-3-flash-preview-preview",   # optional, uses provider default if omitted
     database_url="postgresql://user:pass@host.docker.internal:5432/mydb",
     schema_docs_path="./DATABASE.md",
     data_dir="./my_data",
@@ -116,7 +159,7 @@ Or load from environment:
 from oneprompt import Config
 
 config = Config.from_env()
-print(config.llm_model)          # gemini-3-flash-preview
+print(config.llm_model)          # gemini-3-flash-preview-preview
 print(config.artifact_store_url) # http://localhost:3336
 print(config.mcp_postgres_url)   # http://localhost:3333/mcp
 ```

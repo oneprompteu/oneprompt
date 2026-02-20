@@ -31,7 +31,7 @@ Config(
     agent_max_recursion: int = 10,
     # Cloud mode
     oneprompt_api_key: str = "",
-    oneprompt_api_url: str = "https://api.oneprompt.eu",
+    oneprompt_api_url: str = "",  # set via ONEPROMPT_API_URL env var
 )
 ```
 
@@ -41,7 +41,7 @@ Config(
 |-----------|------|---------|-------------|-------------|
 | `llm_provider` | `str` | `"google"` | `LLM_PROVIDER` | LLM provider: `google`, `openai`, or `anthropic` |
 | `llm_api_key` | `str` | `""` | `LLM_API_KEY` | API key for the chosen LLM provider |
-| `llm_model` | `str` | `""` | `LLM_MODEL` | Model name. If empty, uses provider default (`gemini-3-flash-preview`, `gpt-5`, `claude-sonnet-4.5`) |
+| `llm_model` | `str` | `""` | `LLM_MODEL` | Model name. If empty, uses provider default (`gemini-3-flash-preview-preview`, `gpt-5`, `claude-sonnet-4.5`) |
 | `database_url` | `str` | `""` | `DATABASE_URL` | PostgreSQL connection string |
 | `schema_docs` | `str` | `""` | `OP_SCHEMA_DOCS` | Inline schema documentation |
 | `schema_docs_path` | `str` | `None` | `OP_SCHEMA_DOCS_PATH` | Path to schema docs file |
@@ -55,7 +55,7 @@ Config(
 | `artifact_store_token` | `str` | `""` | `OP_ARTIFACT_TOKEN` | Shared auth token (auto-loaded from `op_data/.artifact_token` if not set) |
 | `agent_max_recursion` | `int` | `10` | `OP_MAX_RECURSION` | Max agent iterations |
 | `oneprompt_api_key` | `str` | `""` | `ONEPROMPT_API_KEY` | Cloud mode API key |
-| `oneprompt_api_url` | `str` | `https://api.oneprompt.eu` | `ONEPROMPT_API_URL` | Cloud API base URL |
+| `oneprompt_api_url` | `str` | `""` | `ONEPROMPT_API_URL` | Cloud API base URL (required in cloud mode) |
 
 ---
 

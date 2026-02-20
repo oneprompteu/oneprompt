@@ -41,7 +41,7 @@ class Config:
 
     # oneprompt cloud settings
     oneprompt_api_key: str = ""
-    oneprompt_api_url: str = "https://api.oneprompt.eu"
+    oneprompt_api_url: str = ""
 
     # LLM settings
     llm_provider: str = "google"
@@ -81,13 +81,18 @@ class Config:
     def __post_init__(self) -> None:
         """Resolve relative paths, apply defaults, and load schema docs."""
         self._DEFAULT_MODELS = {
-            "google": "gemini-3-flash-preview",
+            "google": "gemini-3-flash-preview-preview",
             "openai": "gpt-5",
             "anthropic": "claude-sonnet-4.5",
         }
 
         self.oneprompt_api_key = self.oneprompt_api_key.strip()
         self.oneprompt_api_url = self.oneprompt_api_url.strip().rstrip("/")
+
+        # Auto-load API URL from env if not provided
+        if not self.oneprompt_api_url:
+            self.oneprompt_api_url = os.getenv("ONEPROMPT_API_URL", "").strip().rstrip("/")
+
         self.llm_provider = self.llm_provider.lower().strip()
         if not self.llm_model:
             self.llm_model = self._DEFAULT_MODELS.get(self.llm_provider, "")
@@ -108,7 +113,7 @@ class Config:
 
         Environment variables:
             ONEPROMPT_API_KEY: oneprompt cloud API key (enables cloud mode)
-            ONEPROMPT_API_URL: oneprompt cloud API URL (default: https://api.oneprompt.eu)
+            ONEPROMPT_API_URL: oneprompt cloud API URL (required in cloud mode)
             LLM_PROVIDER: LLM provider — google, openai, anthropic (default: google)
             LLM_API_KEY: API key for the chosen provider
             LLM_MODEL: Model name (defaults per provider if not set)
@@ -132,7 +137,7 @@ class Config:
 
         return cls(
             oneprompt_api_key=oneprompt_api_key,
-            oneprompt_api_url=os.getenv("ONEPROMPT_API_URL", "https://api.oneprompt.eu"),
+            oneprompt_api_url=os.getenv("ONEPROMPT_API_URL", ""),
             llm_provider=os.getenv("LLM_PROVIDER", "google"),
             llm_api_key=os.getenv("LLM_API_KEY", ""),
             llm_model=os.getenv("LLM_MODEL", ""),

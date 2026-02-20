@@ -133,9 +133,7 @@ class Client:
                 resolved_oneprompt_key = load_oneprompt_api_key()
             self._config = Config(
                 oneprompt_api_key=resolved_oneprompt_key,
-                oneprompt_api_url=(
-                    oneprompt_api_url or os.getenv("ONEPROMPT_API_URL", "https://api.oneprompt.eu")
-                ),
+                oneprompt_api_url=oneprompt_api_url or os.getenv("ONEPROMPT_API_URL", ""),
                 llm_provider=llm_provider or os.getenv("LLM_PROVIDER", "google"),
                 llm_api_key=llm_api_key or os.getenv("LLM_API_KEY", ""),
                 llm_model=llm_model or os.getenv("LLM_MODEL", ""),

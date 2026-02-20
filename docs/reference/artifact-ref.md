@@ -68,16 +68,34 @@ download(dest: str | Path = None) -> Path
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `dest` | `str \| Path` | `None` | Destination file or directory. Defaults to `<cwd>/<artifact_name>` |
+| `dest` | `str \| Path` | `None` | Destination path. See resolution rules below. Defaults to `<cwd>/<artifact_name>` |
+
+**Destination resolution rules:**
+
+| `dest` value | Result |
+|---|---|
+| `None` | Saves in cwd using the artifact's original name |
+| Ends with `/` or `\` | Treated as a directory; artifact saved inside it with its original name (directory is created if needed) |
+| Existing directory path | Same as above (original name preserved) |
+| Any other path | Treated as an explicit file path |
 
 ```python
-# Save to a directory (uses the artifact name as the filename)
+# Save to a directory — always use a trailing slash to ensure directory treatment
 path = artifact.download("./output/")
-# → ./output/top_products.csv
+# → ./output/top_products.csv  (directory created if needed)
 
-# Save with a custom filename
+# Save with an explicit filename
 path = artifact.download("./my_data.csv")
 # → ./my_data.csv
+
+# Download all artifacts into a folder
+for art in result.artifacts:
+    art.download("./output/")
+# → ./output/visitas.csv, ./output/visitas.json, ...
+
+# Default: saves next to your script
+path = artifact.download()
+# → <cwd>/top_products.csv
 ```
 
 After calling `download()`, the `path` property is set to the local file path.

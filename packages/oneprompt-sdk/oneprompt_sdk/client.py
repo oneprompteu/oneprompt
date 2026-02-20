@@ -31,15 +31,15 @@ class Client:
 
         if config:
             self._config = config
+            # Override specific fields if explicitly passed to the constructor
+            if oneprompt_api_key:
+                self._config.oneprompt_api_key = oneprompt_api_key.strip()
+            if oneprompt_api_url:
+                self._config.oneprompt_api_url = oneprompt_api_url.strip().rstrip("/")
         else:
-            resolved_oneprompt_key = oneprompt_api_key or os.getenv("ONEPROMPT_API_KEY", "")
-            if not resolved_oneprompt_key:
-                resolved_oneprompt_key = load_oneprompt_api_key()
             self._config = Config(
-                oneprompt_api_key=resolved_oneprompt_key,
-                oneprompt_api_url=(
-                    oneprompt_api_url or os.getenv("ONEPROMPT_API_URL", "https://api.oneprompt.eu")
-                ),
+                oneprompt_api_key=oneprompt_api_key or "",
+                oneprompt_api_url=oneprompt_api_url or "",
             )
 
         errors = self._config.validate()
@@ -159,7 +159,10 @@ class Client:
         if session_id:
             payload["session_id"] = session_id
         has_dataset_id = bool((dataset_id or "").strip())
-        ephemeral_dsn = (database_url or "").strip()
+        # Fall back to config defaults when not provided per-call
+        ephemeral_dsn = (database_url or self._config.database_url or "").strip()
+        if schema_docs is None and self._config.schema_docs:
+            schema_docs = self._config.schema_docs
         has_ephemeral = bool(ephemeral_dsn)
 
         if has_dataset_id and has_ephemeral:

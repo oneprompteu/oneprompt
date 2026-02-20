@@ -75,7 +75,7 @@ from oneprompt import Config
 config = Config(
     llm_provider="google",
     llm_api_key="your-api-key",
-    llm_model="gemini-2.5-flash-preview-05-20",
+    llm_model="gemini-3-flash-preview",
     database_url="postgresql://...",
     schema_docs_path="./DATABASE.md",
     data_dir="./my_data",
@@ -324,7 +324,7 @@ Access the current configuration:
 
 ```python
 client.config  # → Config object
-client.config.llm_model        # "gemini-2.5-flash-preview-05-20"
+client.config.llm_model        # "gemini-3-flash-preview"
 client.config.database_url     # "postgresql://..."
 client.config.data_dir         # "/absolute/path/to/op_data"
 ```

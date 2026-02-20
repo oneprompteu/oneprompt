@@ -69,11 +69,26 @@ class ArtifactRef:
         return self.read_bytes().decode(encoding)
 
     def download(self, dest: Optional[str | Path] = None) -> Path:
-        """Download the artifact to a local file."""
+        """Download the artifact to a local file.
+
+        Args:
+            dest: Destination path. If it ends with ``/`` or ``\\``, or is an
+                existing directory, the artifact is saved inside that directory
+                using its original name. Otherwise treated as an explicit file path.
+
+        Returns:
+            The path where the artifact was written.
+        """
         content = self.read_bytes()
-        target = Path(dest) if dest else Path.cwd() / self.name
-        if target.is_dir():
-            target = target / self.name
+        if dest is None:
+            target = Path.cwd() / self.name
+        else:
+            dest_path = Path(dest)
+            dest_str = str(dest)
+            if dest_str.endswith(("/", "\\")) or dest_path.is_dir():
+                target = dest_path / self.name
+            else:
+                target = dest_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
         self.path = str(target)

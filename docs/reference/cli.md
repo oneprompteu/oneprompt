@@ -38,7 +38,7 @@ Creates mode-specific files:
 
 !!! note
     Existing files are not overwritten.
-    In cloud mode, `op init` runs the equivalent of `op login` and asks for your API key interactively.
+    In cloud mode, `op init` prompts for your oneprompt API key. **The prompt is optional** — press Enter to skip it if you already have `ONEPROMPT_API_KEY` set in your environment or `.env` file, or if you prefer to configure it later with `op login`.
 
 ---
 
@@ -205,7 +205,8 @@ op stop
 # Cloud mode
 op init --mode cloud
 
-# `op init` asks for your oneprompt API key and saves it securely.
+# `op init` optionally asks for your oneprompt API key (press Enter to skip).
+# Set ONEPROMPT_API_KEY and ONEPROMPT_API_URL in your .env file if not saved here.
 # No local Docker startup is needed.
 python example.py
 ```

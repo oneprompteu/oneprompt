@@ -345,39 +345,46 @@ def init(target_dir: str, mode: str | None):
         '    art.download("./output/")\n'
     )
     _CLOUD_EXAMPLE_TEMPLATE = (
-        '"""Example: Query oneprompt Cloud with oneprompt-sdk."""\n'
+        '"""Example: Query your database with oneprompt Cloud."""\n'
         "\n"
-        "import oneprompt_sdk as op\n"
+        "from oneprompt_sdk import Client, Config\n"
         "\n"
-        "client = op.Client(\n"
-        '    oneprompt_api_key=\"YOUR_ONEPROMPT_API_KEY\",  # op_live_...\n'
+        "config = Config(\n"
+        '    database_url="YOUR_POSTGRES_URL",   # postgresql://user:pass@host:5432/db\n'
+        '    schema_docs_path="./DATABASE.md",   # optional but recommended\n'
         ")\n"
         "\n"
-        "# Option 1: Stored dataset in oneprompt Cloud\n"
-        "result = client.query(\n"
-        '    \"Give me the sales data for the last 30 days.\",\n'
-        '    dataset_id=\"YOUR_DATASET_ID\",\n'
-        ")\n"
+        "# API key is loaded automatically from credentials saved by `op init`.\n"
+        "# You can also set ONEPROMPT_API_KEY in your environment or .env file.\n"
+        "client = Client(config=config)\n"
         "\n"
-        "# Option 2: Ephemeral dataset (no persistence)\n"
-        "# result = client.query(\n"
-        "#     \"Give me the sales data for the last 30 days.\",\n"
-        "#     database_url=\"postgresql://user:pass@host:5432/db\",\n"
-        "#     schema_docs=\"# Optional schema docs\",\n"
-        "# )\n"
-        "\n"
+        "# ── 1. Query your database ──────────────────────────────────────────\n"
+        'result = client.query("Give me the sales data for the last 30 days.")\n'
         "print(result.summary)\n"
         "for row in result.preview:\n"
         "    print(row)\n"
         "\n"
-        "chart = client.chart(\"Bar chart of sales by day\", data_from=result)\n"
-        "print(f\"ok={chart.ok}  summary={chart.summary}  error={chart.error}\")\n"
+        "# Artifacts are fetched on-demand — nothing downloads until you ask.\n"
+        "for art in result.artifacts:\n"
+        "    print(art.read_text())         # fetch content from the artifact store\n"
+        '    art.download("./output/")      # save to a local directory\n'
         "\n"
+        "# ── 2. Generate a chart ─────────────────────────────────────────────\n"
+        'chart = client.chart("Bar chart of sales by day", data_from=result)\n'
+        "print(f\"ok={chart.ok}  summary={chart.summary}  error={chart.error}\")\n"
+        "for art in chart.artifacts:\n"
+        "    print(art.read_text())\n"
+        '    art.download("./output/")\n'
+        "\n"
+        "# ── 3. Run Python analysis ──────────────────────────────────────────\n"
         "analysis = client.analyze(\n"
-        '    \"Identify sales trends and highlight top-performing days.\",\n'
+        '    "Identify sales trends and highlight top-performing days.",\n'
         "    data_from=result,\n"
         ")\n"
         "print(f\"ok={analysis.ok}  summary={analysis.summary}  error={analysis.error}\")\n"
+        "for art in analysis.artifacts:\n"
+        "    print(art.read_text())\n"
+        '    art.download("./output/")\n'
     )
     example_template = _LOCAL_EXAMPLE_TEMPLATE if init_mode == "local" else _CLOUD_EXAMPLE_TEMPLATE
     example_file = target / "example.py"
@@ -394,8 +401,22 @@ def init(target_dir: str, mode: str | None):
             click.echo(f"  Created {compose_dst}")
 
     if init_mode == "cloud":
-        path = _save_oneprompt_api_key_interactive()
-        click.echo(f"  Saved oneprompt API key to: {path}")
+        existing_key = _resolve_oneprompt_api_key()
+        if existing_key:
+            click.echo("  oneprompt API key already configured.")
+        raw = click.prompt(
+            "Enter your oneprompt API key (press Enter to skip)",
+            default="",
+            hide_input=True,
+            show_default=False,
+        ).strip()
+        if raw:
+            path = save_oneprompt_api_key(raw)
+            click.echo(f"  Saved oneprompt API key to: {path}")
+        elif existing_key:
+            click.echo("  Keeping existing API key.")
+        else:
+            click.echo("  Skipped. Set ONEPROMPT_API_KEY in your environment or .env file.")
 
     click.echo()
     click.echo(f"Project initialized in {init_mode} mode! Next steps:")

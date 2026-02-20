@@ -42,7 +42,7 @@ def create_llm(
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         return ChatGoogleGenerativeAI(
-            model=model or "gemini-2.5-flash-preview-05-20",
+            model=model or "gemini-3-flash-preview",
             google_api_key=api_key,
             temperature=temperature,
             thinking_level=thinking_level,

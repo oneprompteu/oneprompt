@@ -7,6 +7,7 @@ from __future__ import annotations
 import ast
 import io
 import signal
+import threading
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
 from typing import Any, Dict, Optional
@@ -153,58 +154,75 @@ def execute_code_safely(
     stderr_capture = io.StringIO()
     result_value = None
     
+    _use_sigalrm = hasattr(signal, 'SIGALRM') and threading.current_thread() is threading.main_thread()
+
+    def _do_exec():
+        nonlocal result_value
+        with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+            compiled = compile(code, "<user_code>", "exec")
+            exec(compiled, safe_globals)
+            try:
+                tree = ast.parse(code)
+                if tree.body and isinstance(tree.body[-1], ast.Expr):
+                    last_expr = ast.Expression(tree.body[-1].value)
+                    result_value = eval(
+                        compile(last_expr, "<user_code>", "eval"),
+                        safe_globals
+                    )
+            except Exception:
+                pass
+
     try:
-        # Set up timeout (Unix only)
-        if hasattr(signal, 'SIGALRM'):
+        if _use_sigalrm:
+            # Main thread: use SIGALRM (precise, kills the thread)
             old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
             signal.alarm(timeout)
-        
-        try:
-            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                # Execute the code
-                compiled = compile(code, "<user_code>", "exec")
-                exec(compiled, safe_globals)
-                
-                # Try to get the last expression value
-                try:
-                    tree = ast.parse(code)
-                    if tree.body and isinstance(tree.body[-1], ast.Expr):
-                        last_expr = ast.Expression(tree.body[-1].value)
-                        result_value = eval(
-                            compile(last_expr, "<user_code>", "eval"),
-                            safe_globals
-                        )
-                except Exception:
-                    pass
-        finally:
-            if hasattr(signal, 'SIGALRM'):
+            try:
+                _do_exec()
+            finally:
                 signal.alarm(0)
                 signal.signal(signal.SIGALRM, old_handler)
-        
+        else:
+            # Non-main thread (Cloud Run async context): run in a daemon sub-thread
+            # join() returns after timeout even if thread is still running
+            exec_exc: list = []
+
+            def _target():
+                try:
+                    _do_exec()
+                except Exception as _e:
+                    exec_exc.append(_e)
+
+            t = threading.Thread(target=_target, daemon=True)
+            t.start()
+            t.join(timeout=timeout)
+            if t.is_alive():
+                raise TimeoutError(f"Ejecución cancelada: se excedió el tiempo límite de {timeout}s")
+            if exec_exc:
+                raise exec_exc[0]
+
         # Get output
         stdout_output = stdout_capture.getvalue()
         stderr_output = stderr_capture.getvalue()
-        
-        # Combine and truncate if needed
+
         combined_output = stdout_output
         if stderr_output:
             combined_output += f"\n[stderr]:\n{stderr_output}"
-        
+
         if len(combined_output) > MAX_OUTPUT_SIZE:
             combined_output = (
                 combined_output[:MAX_OUTPUT_SIZE] +
                 f"\n... [output truncado, excede {MAX_OUTPUT_SIZE} bytes]"
             )
-        
-        # Format result
+
         result_str = _format_result(result_value)
-        
+
         return {
             "ok": True,
             "output": combined_output,
             "result": result_str,
         }
-        
+
     except TimeoutError as e:
         return {
             "ok": False,
@@ -217,7 +235,7 @@ def execute_code_safely(
     except Exception as e:
         tb = traceback.format_exc()
         clean_tb = _clean_traceback(tb)
-        
+
         return {
             "ok": False,
             "output": stdout_capture.getvalue(),

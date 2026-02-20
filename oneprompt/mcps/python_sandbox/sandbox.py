@@ -137,10 +137,6 @@ def load_data_science_libraries(namespace: Dict[str, Any]) -> None:
         "pandas": pd,
     })
     
-    # HTTP for artifact store
-    import requests
-    namespace["requests"] = requests
-    
     # Standard library utilities
     import json
     import math

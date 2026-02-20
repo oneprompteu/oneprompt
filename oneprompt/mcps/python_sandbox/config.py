@@ -62,11 +62,9 @@ ALLOWED_IMPORTS: Set[str] = {
     "dateutil",
     "pytz",
     
-    # HTTP client (for artifact store communication)
-    "requests",
-    "httpx",
+    # URL utilities (requests/httpx are intentionally excluded — SSRF risk)
     "urllib.parse",
-    
+
     # Type hints
     "typing",
     "typing_extensions",
@@ -115,7 +113,9 @@ BLOCKED_IMPORTS: Set[str] = {
     "cffi",
     "ffi",
     
-    # Network (except requests/httpx for artifact store)
+    # Network (artifact store access is handled by injected helper functions only)
+    "requests",
+    "httpx",
     "socket",
     "socketserver",
     "ssl",
