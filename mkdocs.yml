@@ -88,7 +88,7 @@ markdown_extensions:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/oneprompt/oneprompt
+      link: https://github.com/oneprompteu/oneprompt
   generator: false
 
-copyright: Copyright &copy; 2025 oneprompt
+copyright: Copyright &copy; 2026 oneprompt

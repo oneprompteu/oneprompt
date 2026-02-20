@@ -1,6 +1,6 @@
 # CLI
 
-The `tp` command-line tool manages your oneprompt project: scaffolding, starting/stopping services, and launching the API server.
+The `op` command-line tool manages your oneprompt project: scaffolding, starting/stopping services, and launching the API server.
 
 ```bash
 op --help
@@ -15,24 +15,30 @@ op --help
 Initialize a new oneprompt project in the current directory.
 
 ```bash
-op init [--dir TARGET_DIR]
+op init [--dir TARGET_DIR] [--mode MODE]
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--dir` | `.` | Target directory to initialize |
+| `--mode` | interactive prompt | `0`/`local` or `1`/`cloud` |
 
-Creates the following files:
+`op init` asks for mode if `--mode` is not provided.
+
+- `0` or `local`: local Docker mode
+- `1` or `cloud`: oneprompt cloud mode
+
+Creates mode-specific files:
 
 | File | Purpose |
 |------|---------|
-| `.env` | Configuration template with API key and database URL placeholders |
-| `DATABASE.md` | Schema documentation template |
-| `docker-compose.yml` | Docker stack for MCP servers |
+| `DATABASE.md` | Local mode only. Schema documentation template |
+| `docker-compose.yml` | Local mode only. Docker stack for MCP servers |
 | `example.py` | Ready-to-run example script |
 
 !!! note
-    Existing files are never overwritten. Only missing files are created.
+    Existing files are not overwritten.
+    In cloud mode, `op init` runs the equivalent of `op login` and asks for your API key interactively.
 
 ---
 
@@ -46,22 +52,22 @@ op start [OPTIONS]
 
 | Option | Env Variable | Description |
 |--------|-------------|-------------|
-| `--gemini-key` | `GOOGLE_API_KEY` | Gemini API key |
-| `--database-url` | `DATABASE_URL` | PostgreSQL connection string |
-| `--schema` | `OP_SCHEMA_DOCS_PATH` | Path to DATABASE.md |
+| `--schema` | `OP_SCHEMA_DOCS_PATH` | Path to DATABASE.md (default: `./DATABASE.md`) |
 | `-d / --detach` | — | Run in background (default: yes) |
 | `--no-detach` | — | Run in foreground |
 
-If credentials are not provided via options or environment variables, you will be prompted interactively.
+LLM credentials and the database URL are **not** required here — set them in your `Config` or `.env` file and they will be picked up by the SDK at runtime.
+
+`op start` automatically generates a secure artifact store token and saves it to `op_data/.artifact_token` so the SDK can authenticate with the Artifact Store.
 
 **Example:**
 
 ```bash
-# Using .env file (recommended)
+# Standard startup (DATABASE.md in current directory)
 op start
 
-# With explicit options
-op start --gemini-key "your-key" --database-url "postgresql://..."
+# Point to a schema file in another location
+op start --schema /path/to/DATABASE.md
 
 # Run in foreground to see logs
 op start --no-detach
@@ -75,6 +81,12 @@ op start --no-detach
 | PostgreSQL MCP | 3333 | SQL query execution engine |
 | Chart MCP | 3334 | AntV chart generation |
 | Python MCP | 3335 | Sandboxed Python execution |
+
+!!! tip "Connecting to a local database"
+    If your PostgreSQL is running on your Mac/host machine, use `host.docker.internal` instead of `localhost` in your database URL:
+    ```
+    postgresql://user:pass@host.docker.internal:5432/mydb
+    ```
 
 ---
 
@@ -144,6 +156,16 @@ op api --no-reload
 
 ---
 
+### `op login`
+
+Save your oneprompt cloud API key for cloud mode.
+
+```bash
+op login [--api-key KEY]
+```
+
+---
+
 ### `op --version`
 
 Show the installed SDK version.
@@ -157,26 +179,33 @@ op --version
 ## Typical Workflow
 
 ```bash
-# 1. Set up the project
-op init
+# Local mode
+op init --mode local
 
-# 2. Edit configuration
-#    → .env (API key, database URL)
-#    → DATABASE.md (schema documentation)
+# 1. Edit DATABASE.md with your schema documentation
 
-# 3. Start services
+# 2. Start services
 op start
 
-# 4. Verify everything is running
+# 3. Verify everything is running
 op status
 
-# 5. Use the SDK or start the API
+# 4. Use the SDK or start the API
 python example.py    # Python SDK
 op api               # REST API
 
-# 6. View logs if needed
+# 5. View logs if needed
 op logs
 
-# 7. Stop when done
+# 6. Stop when done
 op stop
+```
+
+```bash
+# Cloud mode
+op init --mode cloud
+
+# `op init` asks for your oneprompt API key and saves it securely.
+# No local Docker startup is needed.
+python example.py
 ```

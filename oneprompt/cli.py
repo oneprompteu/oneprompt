@@ -68,6 +68,42 @@ def _resolve_oneprompt_api_key(explicit_key: str | None = None) -> str:
     return load_oneprompt_api_key()
 
 
+def _save_oneprompt_api_key_interactive(api_key: str | None = None) -> Path:
+    """Prompt for and persist oneprompt cloud API key."""
+    key = (api_key or "").strip()
+    if not key:
+        key = click.prompt("Enter your oneprompt API key", hide_input=True).strip()
+    if not key:
+        raise click.ClickException("API key cannot be empty")
+    return save_oneprompt_api_key(key)
+
+
+def _parse_init_mode(value: str) -> str | None:
+    """Parse init mode accepting local/cloud aliases."""
+    normalized = value.strip().lower()
+    if normalized in {"0", "local"}:
+        return "local"
+    if normalized in {"1", "cloud"}:
+        return "cloud"
+    return None
+
+
+def _resolve_init_mode(explicit_mode: str | None = None) -> str:
+    """Resolve init mode from option or interactive prompt."""
+    if explicit_mode:
+        parsed = _parse_init_mode(explicit_mode)
+        if parsed is None:
+            raise click.ClickException("Invalid mode. Use: 0, 1, local, or cloud.")
+        return parsed
+
+    while True:
+        raw = click.prompt("Select mode [0=local, 1=cloud]", default="0")
+        parsed = _parse_init_mode(raw)
+        if parsed is not None:
+            return parsed
+        click.echo("Invalid value. Use 0, 1, local, or cloud.")
+
+
 @click.group()
 @click.version_option(version=__version__, prog_name="oneprompt")
 def main():
@@ -79,21 +115,13 @@ def main():
 @click.option("--api-key", envvar="ONEPROMPT_API_KEY", default=None, help="oneprompt cloud API key")
 def login(api_key: str | None):
     """Save oneprompt cloud API key for cloud mode."""
-    key = (api_key or "").strip()
-    if not key:
-        key = click.prompt("Enter your oneprompt API key", hide_input=True).strip()
-    if not key:
-        raise click.ClickException("API key cannot be empty")
-
-    path = save_oneprompt_api_key(key)
+    path = _save_oneprompt_api_key_interactive(api_key)
     click.echo(f"Saved oneprompt API key to: {path}")
-    click.echo("Cloud mode is enabled. `op start` will skip Docker services.")
+    click.echo("Cloud mode is enabled. Use `oneprompt_sdk.Client(oneprompt_api_key=...)` in your code.")
+    click.echo("For cloud-only usage, prefer: pip install oneprompt-sdk")
 
 
 @main.command()
-@click.option("--oneprompt-key", envvar="ONEPROMPT_API_KEY", help="oneprompt cloud API key")
-@click.option("--llm-key", envvar="LLM_API_KEY", help="LLM API key")
-@click.option("--database-url", envvar="DATABASE_URL", help="PostgreSQL connection string")
 @click.option(
     "--schema",
     "schema_path",
@@ -103,31 +131,13 @@ def login(api_key: str | None):
 )
 @click.option("--detach/--no-detach", "-d", default=True, help="Run in background")
 def start(
-    oneprompt_key: str | None,
-    llm_key: str | None,
-    database_url: str | None,
     schema_path: str | None,
     detach: bool,
 ):
-    """Start local MCP services, or no-op when cloud mode is configured."""
+    """Start local MCP services (Docker)."""
     load_dotenv(Path.cwd() / ".env")
-    oneprompt_key = _resolve_oneprompt_api_key(oneprompt_key)
-    if oneprompt_key:
-        click.echo("Cloud mode detected (ONEPROMPT_API_KEY configured).")
-        click.echo("Skipping local Docker startup. Use op.Client(oneprompt_api_key=...) directly.")
-        return
 
-    llm_key = llm_key or os.environ.get("LLM_API_KEY")
-    database_url = database_url or os.environ.get("DATABASE_URL")
     schema_path = schema_path or os.environ.get("OP_SCHEMA_DOCS_PATH")
-
-    if not llm_key:
-        llm_key = click.prompt("Enter your LLM API key", hide_input=True)
-    if not database_url:
-        database_url = click.prompt(
-            "Enter your PostgreSQL connection string",
-            default="postgresql://user:pass@localhost:5432/mydb",
-        )
 
     # Resolve DATABASE.md path
     if schema_path:
@@ -165,8 +175,6 @@ def start(
     token_file.write_text(artifact_token)
 
     env = os.environ.copy()
-    env["LLM_API_KEY"] = llm_key
-    env["DATABASE_URL"] = database_url
     env["OP_ARTIFACT_TOKEN"] = artifact_token
     env["OP_SCHEMA_DOCS_PATH"] = str(schema_file)
 
@@ -247,90 +255,18 @@ def api(host: str, port: int, reload: bool):
         raise click.ClickException("uvicorn is required. Install with: pip install uvicorn")
 
 
-_ENV_TEMPLATE = """\
-# oneprompt Configuration
-# Documentation: https://github.com/oneprompt/oneprompt
-
-# ---- oneprompt Cloud (optional) ----
-# If ONEPROMPT_API_KEY is set, the SDK/CLI use cloud mode and skip local Docker.
-# ONEPROMPT_API_KEY=op_live_xxx
-# ONEPROMPT_API_URL=https://api.oneprompt.eu
-
-# ---- LLM Provider ----
-# Supported: google, openai, anthropic
-LLM_PROVIDER=google
-
-# ---- LLM API Key ----
-# Google / Vertex AI: https://aistudio.google.com/apikey
-# OpenAI: https://platform.openai.com/api-keys
-# Anthropic: https://console.anthropic.com/settings/keys
-LLM_API_KEY=your-api-key-here
-
-# ---- LLM Model ----
-# Leave empty to use the default model for your provider
-# LLM_MODEL=
-
-# ---- Database ----
-DATABASE_URL=postgresql://user:password@localhost:5432/mydb
-
-# ---- Schema Documentation ----
-# Path to your DATABASE.md with table/column descriptions
-OP_SCHEMA_DOCS_PATH=./DATABASE.md
-
-# ---- Data Directory ----
-OP_DATA_DIR=./op_data
-
-# ---- Agent Settings ----
-# Maximum agent reasoning iterations (default: 10)
-# OP_MAX_RECURSION=10
-
-# ---- Service Ports ----
-# OP_PORT=8000
-# OP_ARTIFACT_PORT=3336
-# OP_POSTGRES_MCP_PORT=3333
-# OP_CHART_MCP_PORT=3334
-# OP_PYTHON_MCP_PORT=3335
-
-# ---- Artifact Store ----
-# Auto-generated on `op start` and saved to {data_dir}/.artifact_token
-# Only set manually if you need a specific token
-# OP_ARTIFACT_TOKEN=your-secret-token
-
-# ---- LangSmith (optional) ----
-# LANGSMITH_TRACING=true
-# LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com
-# LANGSMITH_API_KEY=your-langsmith-key
-# LANGSMITH_PROJECT=your-project-name
-"""
-
-_CLOUD_ENV_EXAMPLE = """\
-# oneprompt Cloud example configuration
-# Use this instead of local Docker credentials when running in cloud mode.
-
-ONEPROMPT_API_KEY=op_live_your_api_key
-ONEPROMPT_API_URL=https://api.oneprompt.eu
-"""
 
 
 @main.command()
 @click.option("--dir", "target_dir", default=".", help="Target directory")
-def init(target_dir: str):
+@click.option("--mode", default=None, help="Mode: 0/1 or local/cloud")
+def init(target_dir: str, mode: str | None):
     """Initialize a new oneprompt project."""
     target = Path(target_dir).resolve()
     target.mkdir(parents=True, exist_ok=True)
+    init_mode = _resolve_init_mode(mode)
 
-    # Create .env template
-    env_file = target / ".env"
-    if not env_file.exists():
-        env_file.write_text(_ENV_TEMPLATE)
-        click.echo(f"  Created {env_file}")
-
-    cloud_env_file = target / ".env.cloud.example"
-    if not cloud_env_file.exists():
-        cloud_env_file.write_text(_CLOUD_ENV_EXAMPLE)
-        click.echo(f"  Created {cloud_env_file}")
-
-    # Create DATABASE.md template
+    # Create DATABASE.md template (useful in both modes)
     schema_file = target / "DATABASE.md"
     if not schema_file.exists():
         schema_file.write_text(
@@ -363,60 +299,119 @@ def init(target_dir: str):
         click.echo(f"  Created {schema_file}")
 
     # Create example script
+    _LOCAL_EXAMPLE_TEMPLATE = (
+        '"""Example: Query your database with oneprompt."""\n'
+        "\n"
+        "# import logging\n"
+        "# logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')\n"
+        "\n"
+        "from oneprompt import Client, Config\n"
+        "\n"
+        "config = Config(\n"
+        '    llm_api_key="YOUR_API_KEY",         # Google / OpenAI / Anthropic key\n'
+        '    llm_provider="google",              # "google", "openai", or "anthropic"\n'
+        '    database_url="YOUR_POSTGRES_URL",   # postgresql://user:pass@host:5432/db\n'
+        '    schema_docs_path="./DATABASE.md",   # optional but recommended\n'
+        ")\n"
+        "\n"
+        "client = Client(config=config)\n"
+        "\n"
+        "# ── 1. Query your database ──────────────────────────────────────────\n"
+        'result = client.query("Give me the sales data for the last 30 days.")\n'
+        "print(result.summary)\n"
+        "for row in result.preview:\n"
+        "    print(row)\n"
+        "\n"
+        "# Artifacts are fetched on-demand — nothing downloads until you ask.\n"
+        "for art in result.artifacts:\n"
+        "    print(art.read_text())         # fetch content from the artifact store\n"
+        '    art.download("./output/")      # save to a local directory\n'
+        "\n"
+        "# ── 2. Generate a chart ─────────────────────────────────────────────\n"
+        'chart = client.chart("Bar chart of sales by day", data_from=result)\n'
+        "print(f\"ok={chart.ok}  summary={chart.summary}  error={chart.error}\")\n"
+        "for art in chart.artifacts:\n"
+        "    print(art.read_text())\n"
+        '    art.download("./output/")\n'
+        "\n"
+        "# ── 3. Run Python analysis ──────────────────────────────────────────\n"
+        "analysis = client.analyze(\n"
+        '    "Identify sales trends and highlight top-performing days.",\n'
+        "    data_from=result,\n"
+        ")\n"
+        "print(f\"ok={analysis.ok}  summary={analysis.summary}  error={analysis.error}\")\n"
+        "for art in analysis.artifacts:\n"
+        "    print(art.read_text())\n"
+        '    art.download("./output/")\n'
+    )
+    _CLOUD_EXAMPLE_TEMPLATE = (
+        '"""Example: Query oneprompt Cloud with oneprompt-sdk."""\n'
+        "\n"
+        "import oneprompt_sdk as op\n"
+        "\n"
+        "client = op.Client(\n"
+        '    oneprompt_api_key=\"YOUR_ONEPROMPT_API_KEY\",  # op_live_...\n'
+        ")\n"
+        "\n"
+        "# Option 1: Stored dataset in oneprompt Cloud\n"
+        "result = client.query(\n"
+        '    \"Give me the sales data for the last 30 days.\",\n'
+        '    dataset_id=\"YOUR_DATASET_ID\",\n'
+        ")\n"
+        "\n"
+        "# Option 2: Ephemeral dataset (no persistence)\n"
+        "# result = client.query(\n"
+        "#     \"Give me the sales data for the last 30 days.\",\n"
+        "#     database_url=\"postgresql://user:pass@host:5432/db\",\n"
+        "#     schema_docs=\"# Optional schema docs\",\n"
+        "# )\n"
+        "\n"
+        "print(result.summary)\n"
+        "for row in result.preview:\n"
+        "    print(row)\n"
+        "\n"
+        "chart = client.chart(\"Bar chart of sales by day\", data_from=result)\n"
+        "print(f\"ok={chart.ok}  summary={chart.summary}  error={chart.error}\")\n"
+        "\n"
+        "analysis = client.analyze(\n"
+        '    \"Identify sales trends and highlight top-performing days.\",\n'
+        "    data_from=result,\n"
+        ")\n"
+        "print(f\"ok={analysis.ok}  summary={analysis.summary}  error={analysis.error}\")\n"
+    )
+    example_template = _LOCAL_EXAMPLE_TEMPLATE if init_mode == "local" else _CLOUD_EXAMPLE_TEMPLATE
     example_file = target / "example.py"
     if not example_file.exists():
-        example_file.write_text(
-            '"""Example: Query your database with oneprompt."""\n'
-            "\n"
-            "import oneprompt as op\n"
-            "\n"
-            "# Initialize client (reads from .env or pass directly)\n"
-            "client = op.Client()\n"
-            "\n"
-            "# ── 1. Query your database ──────────────────────────────────────────\n"
-            'result = client.query("Show me the top 10 customers by order total.")\n'
-            "print(result.summary)\n"
-            "for row in result.preview:\n"
-            "    print(row)\n"
-            "\n"
-            "# Artifacts are fetched on-demand — nothing downloads until you ask.\n"
-            "for art in result.artifacts:\n"
-            "    print(art.read_text())         # fetch content from the artifact store\n"
-            '    art.download("./output/")     # save to a local directory\n'
-            "\n"
-            "# ── 2. Generate a chart ─────────────────────────────────────────────\n"
-            'chart = client.chart("Bar chart of top customers", data_from=result)\n'
-            "print(chart.summary)\n"
-            "for art in chart.artifacts:\n"
-            "    print(art.read_text())\n"
-            '    art.download("./output/")\n'
-            "\n"
-            "# ── 3. Run Python analysis ──────────────────────────────────────────\n"
-            "analysis = client.analyze(\n"
-            '    "Calculate average order value per customer",\n'
-            "    data_from=result,\n"
-            ")\n"
-            "print(analysis.summary)\n"
-            "for art in analysis.artifacts:\n"
-            "    print(art.read_text())\n"
-            '    art.download("./output/")\n'
-        )
+        example_file.write_text(example_template)
         click.echo(f"  Created {example_file}")
 
-    # Copy docker-compose.yml
-    compose_src = Path(__file__).resolve().parent.parent / "docker-compose.yml"
-    compose_dst = target / "docker-compose.yml"
-    if compose_src.exists() and not compose_dst.exists():
-        shutil.copy2(compose_src, compose_dst)
-        click.echo(f"  Created {compose_dst}")
+    if init_mode == "local":
+        # Copy docker-compose.yml
+        compose_src = Path(__file__).resolve().parent.parent / "docker-compose.yml"
+        compose_dst = target / "docker-compose.yml"
+        if compose_src.exists() and not compose_dst.exists():
+            shutil.copy2(compose_src, compose_dst)
+            click.echo(f"  Created {compose_dst}")
+
+    if init_mode == "cloud":
+        path = _save_oneprompt_api_key_interactive()
+        click.echo(f"  Saved oneprompt API key to: {path}")
 
     click.echo()
-    click.echo("Project initialized! Next steps:")
+    click.echo(f"Project initialized in {init_mode} mode! Next steps:")
     click.echo()
-    click.echo("  1. Local mode: edit .env with LLM + database settings, then run: op start")
-    click.echo("  2. Cloud mode: run `op login` (or set ONEPROMPT_API_KEY) and skip op start")
-    click.echo("  3. Edit DATABASE.md with your database schema (local mode)")
-    click.echo("  4. Run the example: python example.py")
+    if init_mode == "local":
+        click.echo("  1. Edit example.py — fill in YOUR_API_KEY and YOUR_POSTGRES_URL")
+        click.echo("  2. Edit DATABASE.md with your database schema")
+        click.echo("  3. Start services: op start")
+        click.echo("  4. Run the example: python example.py")
+        click.echo()
+        click.echo("  Tip: you can also use environment variables (LLM_API_KEY, DATABASE_URL)")
+        click.echo("       or a .env file instead of passing credentials in code.")
+    else:
+        click.echo("  1. Install cloud SDK: pip install oneprompt-sdk")
+        click.echo("  2. Use `import oneprompt_sdk as op` in your app")
+        click.echo("  3. Run without Docker (`op start` is not needed in cloud mode)")
     click.echo()
 
 

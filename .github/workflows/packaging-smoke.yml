@@ -1,0 +1,41 @@
+name: Packaging Smoke Tests
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  build-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build toolchain
+        run: python -m pip install --upgrade pip build
+
+      - name: Build oneprompt-sdk
+        run: python -m build
+        working-directory: packages/oneprompt-sdk
+
+      - name: Build oneprompt
+        run: python -m build
+
+      - name: Install oneprompt-sdk wheel
+        run: pip install packages/oneprompt-sdk/dist/oneprompt_sdk-*.whl
+
+      - name: Cloud import smoke test
+        run: python -c "import oneprompt_sdk as op; print(op.__version__)"
+
+      - name: Install oneprompt wheel
+        run: pip install dist/oneprompt-*.whl
+
+      - name: Full import smoke test
+        run: python -c "import oneprompt as op; print(op.__version__)"

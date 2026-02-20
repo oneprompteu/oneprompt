@@ -16,6 +16,8 @@ build/
 *.egg
 .venv/
 test/
+.pytest_cache/
+.benchmarks
 
 # Data
 op_data/

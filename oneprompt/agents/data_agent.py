@@ -5,27 +5,59 @@ Uses a LangChain agent with Gemini LLM connected to a PostgreSQL MCP server
 to translate natural language questions into SQL queries.
 """
 
-from datetime import date
-from pydantic import BaseModel, Field
+import logging
 import os
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Literal
 import warnings
+from datetime import date
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.tools import load_mcp_tools
+logger = logging.getLogger(__name__)
+
+import httpx
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
 from langchain_core.messages import HumanMessage
-from mcp.shared._httpx_utils import create_mcp_http_client
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
+from mcp.shared._httpx_utils import MCP_DEFAULT_SSE_READ_TIMEOUT, MCP_DEFAULT_TIMEOUT
+from pydantic import BaseModel, Field
 
 from oneprompt.agents.context import AgentContext
 from oneprompt.agents.llm import create_llm
+from oneprompt.agents.metrics import RunMetrics, UsageCallback
+from oneprompt.services.dataset_token import (
+    DatasetTokenError,
+    create_dataset_token,
+    dataset_token_enabled,
+)
 
 warnings.filterwarnings(
     "ignore",
     message="Key 'additionalProperties' is not supported in schema, ignoring",
 )
+
+
+def _create_mcp_http_client(
+    headers: Optional[dict[str, str]] = None,
+    timeout: Optional[httpx.Timeout] = None,
+    auth: Optional[httpx.Auth] = None,
+) -> httpx.AsyncClient:
+    """Create MCP HTTP client for local services without env proxy inheritance."""
+    resolved_timeout = timeout or httpx.Timeout(
+        MCP_DEFAULT_TIMEOUT,
+        read=MCP_DEFAULT_SSE_READ_TIMEOUT,
+    )
+    kwargs: dict[str, Any] = {
+        "follow_redirects": True,
+        "timeout": resolved_timeout,
+        "trust_env": False,
+    }
+    if headers is not None:
+        kwargs["headers"] = headers
+    if auth is not None:
+        kwargs["auth"] = auth
+    return httpx.AsyncClient(**kwargs)
 
 
 def _recursion_limit() -> int:
@@ -35,6 +67,15 @@ def _recursion_limit() -> int:
     except ValueError:
         return 10
     return max(1, limit)
+
+
+def _dataset_token_ttl_seconds() -> int:
+    raw = os.getenv("DATASET_TOKEN_TTL_SECONDS", "900").strip()
+    try:
+        ttl = int(raw)
+    except ValueError:
+        return 900
+    return max(30, min(ttl, 3600))
 
 
 class ArtifactRef(BaseModel):
@@ -47,7 +88,7 @@ async def run(
     question: str,
     context: AgentContext,
     dataset_config: Optional[Dict[str, Any]] = None,
-) -> str:
+) -> tuple[str, RunMetrics]:
     """
     Execute a natural language question against a PostgreSQL MCP server.
 
@@ -59,6 +100,8 @@ async def run(
     Returns:
         JSON string conforming to DataResponse schema.
     """
+    usage_cb = UsageCallback()
+
     mcp_url = os.environ.get("MCP_POSTGRES_URL")
     if not mcp_url:
         raise RuntimeError("MCP_POSTGRES_URL must be set (hint: start MCP servers with `op start`)")
@@ -67,10 +110,30 @@ async def run(
         "mcp-session-id": context.session_id,
         "mcp-run-id": context.run_id,
     }
+    mcp_auth_token = os.getenv("MCP_AUTH_TOKEN") or os.getenv("MCP_SHARED_TOKEN")
+    if mcp_auth_token:
+        connection_headers["x-mcp-auth"] = mcp_auth_token
 
     if dataset_config:
-        if dataset_config.get("dsn"):
-            connection_headers["x-dataset-dsn"] = dataset_config["dsn"]
+        dsn_value = str(dataset_config.get("dsn", "")).strip()
+        if dsn_value:
+            if dataset_token_enabled():
+                try:
+                    token = create_dataset_token(
+                        dsn_value,
+                        audience="postgres-mcp",
+                        ttl_seconds=_dataset_token_ttl_seconds(),
+                        dataset_id=dataset_config.get("id"),
+                        dataset_name=dataset_config.get("name"),
+                        session_id=context.session_id,
+                        run_id=context.run_id,
+                    )
+                except DatasetTokenError as exc:
+                    raise RuntimeError(f"Failed to build dataset token: {exc}") from exc
+                connection_headers["x-dataset-token"] = token
+            else:
+                # Backwards-compatible local mode fallback when no token secret is configured.
+                connection_headers["x-dataset-dsn"] = dsn_value
         if dataset_config.get("id"):
             connection_headers["x-dataset-id"] = dataset_config["id"]
         if dataset_config.get("name"):
@@ -85,7 +148,7 @@ async def run(
     def _httpx_factory(headers=None, timeout=None, auth=None):
         merged = dict(headers or {})
         merged.update(connection_headers)
-        return create_mcp_http_client(headers=merged, timeout=timeout, auth=auth)
+        return _create_mcp_http_client(headers=merged, timeout=timeout, auth=auth)
 
     connection["httpx_client_factory"] = _httpx_factory
 
@@ -136,26 +199,41 @@ async def run(
             response_format=ProviderStrategy(DataResponse),
         )
 
+        logger.info("[data_agent] invoking agent for: %s", question[:120])
         result = await agent.ainvoke(
             {"messages": [HumanMessage(content=question)]},
-            {"recursion_limit": _recursion_limit()},
+            {"recursion_limit": _recursion_limit(), "callbacks": [usage_cb]},
         )
         structured = result.get("structured_response")
         if not structured:
+            # Log last agent message to help diagnose
+            messages = result.get("messages", [])
+            if messages:
+                last = messages[-1]
+                content = getattr(last, "content", "")
+                logger.error(
+                    "[data_agent] no structured_response. Last agent message: %s",
+                    str(content)[:500],
+                )
+            else:
+                logger.error("[data_agent] no structured_response and no messages in result")
             fallback = DataResponse(
                 ok=False,
                 error={"tool": "agent", "kind": "no_tool_output"},
             )
-            return fallback.model_dump_json()
+            return fallback.model_dump_json(), usage_cb.to_metrics()
 
         if isinstance(structured, DataResponse):
-            return structured.model_dump_json()
+            logger.info("[data_agent] ok=%s", structured.ok)
+            return structured.model_dump_json(), usage_cb.to_metrics()
         if isinstance(structured, dict):
             resp = DataResponse(**structured)
-            return resp.model_dump_json()
+            logger.info("[data_agent] ok=%s", resp.ok)
+            return resp.model_dump_json(), usage_cb.to_metrics()
 
+        logger.error("[data_agent] unexpected structured_response type: %s", type(structured))
         fallback = DataResponse(
             ok=False,
             error={"tool": "agent", "kind": "unexpected_structured_response"},
         )
-        return fallback.model_dump_json()
+        return fallback.model_dump_json(), usage_cb.to_metrics()

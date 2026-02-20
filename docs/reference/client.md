@@ -14,7 +14,11 @@ client = op.Client()
 
 ```python
 Client(
-    gemini_api_key: str = None,
+    oneprompt_api_key: str = None,
+    oneprompt_api_url: str = None,
+    llm_api_key: str = None,
+    llm_provider: str = None,
+    llm_model: str = None,
     database_url: str = None,
     schema_docs: str = None,
     schema_docs_path: str = None,
@@ -28,7 +32,11 @@ Client(
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `gemini_api_key` | `str` | `None` | Google Gemini API key. Falls back to `GOOGLE_API_KEY` env var |
+| `oneprompt_api_key` | `str` | `None` | API key for cloud mode. Falls back to `ONEPROMPT_API_KEY` env var |
+| `oneprompt_api_url` | `str` | `None` | Cloud API base URL. Falls back to `ONEPROMPT_API_URL` env var |
+| `llm_api_key` | `str` | `None` | API key for the LLM provider. Falls back to `LLM_API_KEY` env var |
+| `llm_provider` | `str` | `None` | LLM provider: `google`, `openai`, or `anthropic`. Falls back to `LLM_PROVIDER` env var |
+| `llm_model` | `str` | `None` | Model name. Uses provider default if omitted |
 | `database_url` | `str` | `None` | PostgreSQL connection string. Falls back to `DATABASE_URL` env var |
 | `schema_docs` | `str` | `None` | Inline database schema documentation string |
 | `schema_docs_path` | `str` | `None` | Path to a `DATABASE.md` file with schema docs |
@@ -46,13 +54,14 @@ client = op.Client()
 
 # Option B: Pass credentials directly
 client = op.Client(
-    gemini_api_key="your-key",
+    llm_provider="google",
+    llm_api_key="your-api-key",
     database_url="postgresql://user:pass@localhost:5432/mydb",
 )
 
 # Option C: With schema docs
 client = op.Client(
-    gemini_api_key="your-key",
+    llm_api_key="your-api-key",
     database_url="postgresql://user:pass@localhost:5432/mydb",
     schema_docs_path="./DATABASE.md",
 )
@@ -64,9 +73,11 @@ client = op.Client(data_dir="./output")
 from oneprompt import Config
 
 config = Config(
-    gemini_api_key="your-key",
+    llm_provider="google",
+    llm_api_key="your-api-key",
+    llm_model="gemini-2.5-flash-preview-05-20",
     database_url="postgresql://...",
-    gemini_model="gemini-3-flash-preview",
+    schema_docs_path="./DATABASE.md",
     data_dir="./my_data",
 )
 client = op.Client(config=config)
@@ -79,7 +90,7 @@ The client validates required settings on initialization:
 ```python
 client = op.Client()
 # ValueError: Configuration errors:
-#   - gemini_api_key is required (env: GOOGLE_API_KEY)
+#   - llm_api_key is required (env: LLM_API_KEY)
 #   - database_url is required (env: DATABASE_URL)
 ```
 
@@ -95,6 +106,9 @@ Query your PostgreSQL database using natural language.
 query(
     question: str,
     session_id: str = None,
+    dataset_id: str = None,
+    database_url: str = None,
+    schema_docs: str = None,
 ) -> AgentResult
 ```
 
@@ -104,6 +118,9 @@ query(
 |-----------|------|----------|-------------|
 | `question` | `str` | ✅ | Natural language question about your data |
 | `session_id` | `str` | ❌ | Session ID for grouping related runs. Auto-created if omitted |
+| `dataset_id` | `str` | ❌ | **Cloud mode only.** Use a stored dataset by ID |
+| `database_url` | `str` | ❌ | DSN override. In cloud mode this uses an ephemeral (non-persistent) dataset |
+| `schema_docs` | `str` | ❌ | Optional schema docs override (used with `database_url`) |
 
 #### Returns
 
@@ -113,6 +130,7 @@ query(
 - `preview` — First rows of data as a list of dicts
 - `columns` — Column names from the result set
 - `artifacts` — CSV and JSON files with the full result
+- `metrics` — Token usage and timing ([`RunMetrics`](agent-result.md#runmetrics))
 
 #### Example
 
@@ -123,6 +141,7 @@ print(result.ok)        # True
 print(result.summary)   # "Top 10 products by revenue"
 print(result.columns)   # ["product_name", "total_revenue"]
 print(result.preview)   # [{"product_name": "Widget Pro", "total_revenue": "45230.00"}, ...]
+print(result.metrics)   # RunMetrics(duration_ms=5210.4, input_tokens=1840, ...)
 
 # Access the generated files
 for artifact in result.artifacts:
@@ -130,6 +149,33 @@ for artifact in result.artifacts:
     print(artifact.read_text())              # fetch content on demand
     artifact.download("./output/")           # save locally
 ```
+
+#### Cloud Mode Dataset Selection
+
+In cloud mode, each `query()` must choose exactly one dataset source:
+
+1. Stored dataset:
+```python
+result = client.query(
+    "Top 10 products by revenue",
+    dataset_id="ds_123456",
+)
+```
+
+2. Ephemeral dataset (no credential persistence):
+```python
+result = client.query(
+    "Top 10 products by revenue",
+    database_url="postgresql://user:pass@host:5432/db",
+    schema_docs="# Optional inline schema docs",
+)
+```
+
+Rules:
+
+- `dataset_id` and `database_url` are mutually exclusive.
+- `schema_docs` with `dataset_id` is rejected in cloud mode.
+- In local mode, `dataset_id` is ignored/rejected (no cloud dataset registry).
 
 #### How It Works
 
@@ -170,6 +216,7 @@ chart(
 
 - `summary` — Description of the generated chart
 - `artifacts` — HTML file containing the interactive chart
+- `metrics` — Token usage and timing ([`RunMetrics`](agent-result.md#runmetrics))
 
 #### Example
 
@@ -234,6 +281,7 @@ analyze(
 
 - `summary` — Description of the analysis performed
 - `artifacts` — Output files from the analysis
+- `metrics` — Token usage and timing ([`RunMetrics`](agent-result.md#runmetrics))
 
 #### Example
 
@@ -276,7 +324,7 @@ Access the current configuration:
 
 ```python
 client.config  # → Config object
-client.config.gemini_model     # "gemini-3-flash-preview"
+client.config.llm_model        # "gemini-2.5-flash-preview-05-20"
 client.config.database_url     # "postgresql://..."
 client.config.data_dir         # "/absolute/path/to/op_data"
 ```

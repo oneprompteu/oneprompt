@@ -11,16 +11,26 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import uuid
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-import httpx
 from dotenv import load_dotenv
 
 from oneprompt.config import Config
 from oneprompt.services.credentials import load_oneprompt_api_key
+
+try:
+    from oneprompt_sdk.client import Client as CloudClient
+    from oneprompt_sdk.types import AgentResult, ArtifactRef, RunMetrics
+except ImportError:
+    # Ensure monorepo source imports work before oneprompt-sdk is published/installed.
+    _monorepo_sdk_path = Path(__file__).resolve().parent.parent / "packages" / "oneprompt-sdk"
+    if _monorepo_sdk_path.exists() and str(_monorepo_sdk_path) not in sys.path:
+        sys.path.insert(0, str(_monorepo_sdk_path))
+    from oneprompt_sdk.client import Client as CloudClient
+    from oneprompt_sdk.types import AgentResult, ArtifactRef, RunMetrics
 
 # Suppress noisy warnings from Google/LangChain internals
 logging.getLogger("langchain_google_genai._function_utils").setLevel(logging.ERROR)
@@ -29,109 +39,29 @@ logging.getLogger("google_genai.types").setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ArtifactRef:
-    """Reference to a generated artifact (file).
-
-    Artifacts live in the artifact store (Docker container). Access them
-    on demand — nothing is downloaded until you ask for it.
-
-    Examples:
-        >>> text = artifact.read_text()        # fetch + return content
-        >>> artifact.download("./output/")     # save to a local directory
-        >>> df = pd.read_csv(artifact.download())  # download then read
-    """
-
-    id: str
-    name: str
-    type: Optional[str] = None
-    path: Optional[str] = None
-    url: Optional[str] = None
-    _download_url: Optional[str] = field(default=None, repr=False)
-    _auth_token: Optional[str] = field(default=None, repr=False)
-    _cached_bytes: Optional[bytes] = field(default=None, repr=False)
-
-    # -- reading ---------------------------------------------------------------
-
-    def read_bytes(self) -> bytes:
-        """Read artifact content as bytes.
-
-        Checks (in order): local file, memory cache, remote URL.
-        The result is cached in memory so subsequent calls are free.
-        """
-        if self.path and Path(self.path).exists():
-            return Path(self.path).read_bytes()
-        if self._cached_bytes is not None:
-            return self._cached_bytes
-        if self._download_url:
-            self._cached_bytes = self._fetch()
-            return self._cached_bytes
-        raise FileNotFoundError(
-            f"Artifact '{self.name}' not available locally and no download URL set"
-        )
-
-    def read_text(self, encoding: str = "utf-8") -> str:
-        """Read artifact content as text."""
-        return self.read_bytes().decode(encoding)
-
-    # -- downloading -----------------------------------------------------------
-
-    def download(self, dest: Optional[str | Path] = None) -> Path:
-        """Download the artifact to a local file.
-
-        Args:
-            dest: Destination file path or directory.  Defaults to
-                  ``<cwd>/<artifact_name>``.
-
-        Returns:
-            Path to the downloaded file.
-        """
-        content = self.read_bytes()
-        target = Path(dest) if dest else Path.cwd() / self.name
-        if target.is_dir():
-            target = target / self.name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(content)
-        self.path = str(target)
-        return target
-
-    # -- internals -------------------------------------------------------------
-
-    def _fetch(self) -> bytes:
-        """Fetch artifact bytes from the remote artifact store."""
-        if not self._download_url:
-            raise FileNotFoundError("No download URL configured")
-        headers: Dict[str, str] = {}
-        if self._auth_token:
-            headers["Authorization"] = f"Bearer {self._auth_token}"
-            headers["X-API-Key"] = self._auth_token
-        with httpx.Client(timeout=30.0) as http:
-            resp = http.get(self._download_url, headers=headers)
-            resp.raise_for_status()
-            return resp.content
+def _iter_leaf_exceptions(exc: BaseException) -> list[BaseException]:
+    """Return leaf exceptions from nested ExceptionGroup structures."""
+    leaves: list[BaseException] = []
+    if isinstance(exc, BaseExceptionGroup):
+        for sub in exc.exceptions:
+            leaves.extend(_iter_leaf_exceptions(sub))
+    else:
+        leaves.append(exc)
+    return leaves
 
 
-@dataclass
-class AgentResult:
-    """Result from an agent execution."""
+def _is_mcp_connect_error(exc: BaseException) -> bool:
+    """Whether an exception is a transport-level MCP connection error."""
+    exc_type = type(exc)
+    module_name = getattr(exc_type, "__module__", "")
+    type_name = getattr(exc_type, "__name__", "")
+    if type_name == "ConnectError" and (
+        module_name.startswith("httpx") or module_name.startswith("httpcore")
+    ):
+        return True
 
-    ok: bool
-    run_id: str
-    session_id: str
-    summary: Optional[str] = None
-    data: Dict[str, Any] = field(default_factory=dict)
-    artifacts: List[ArtifactRef] = field(default_factory=list)
-    error: Optional[str] = None
-
-    @property
-    def preview(self) -> List[Dict[str, Any]]:
-        """Get data preview rows (for data agent results)."""
-        return self.data.get("preview", [])
-
-    @property
-    def columns(self) -> List[str]:
-        """Get column names (for data agent results)."""
-        return self.data.get("columns", [])
+    text = str(exc).lower()
+    return "all connection attempts failed" in text or "failed to connect" in text
 
 
 class Client:
@@ -232,10 +162,15 @@ class Client:
 
         self._is_cloud_mode = self._config.mode == "cloud"
         self._default_session_id: Optional[str] = None
+        self._cloud_client: Optional[CloudClient] = None
 
         if self._is_cloud_mode:
             self._state = None
             self._user_id = "cloud_user"
+            self._cloud_client = CloudClient(
+                oneprompt_api_key=self._config.oneprompt_api_key,
+                oneprompt_api_url=self._config.oneprompt_api_url,
+            )
             return
 
         # Set environment variables for local agents
@@ -283,23 +218,6 @@ class Client:
 
         return AgentContext(session_id=session_id, run_id=run_id, artifact_store=client)
 
-    def _cloud_headers(self) -> dict[str, str]:
-        """Build request headers for oneprompt cloud API."""
-        key = self._config.oneprompt_api_key
-        return {
-            "Authorization": f"Bearer {key}",
-            "X-API-Key": key,
-            "Content-Type": "application/json",
-        }
-
-    async def _cloud_post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Execute a POST request to oneprompt cloud API."""
-        url = f"{self._config.oneprompt_api_url}{path}"
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, json=payload, headers=self._cloud_headers())
-            response.raise_for_status()
-            return response.json()
-
     def _build_artifacts(
         self,
         raw_artifacts: list[dict[str, Any]],
@@ -331,49 +249,17 @@ class Client:
             )
         return artifacts
 
-    def _parse_cloud_result(self, payload: dict[str, Any]) -> AgentResult:
-        """Parse cloud API response payload into AgentResult."""
-        run_id = str(payload.get("run_id", uuid.uuid4().hex))
-        session_id = str(payload.get("session_id", ""))
-        result_data = payload.get("result", {})
-        if not isinstance(result_data, dict):
-            result_data = {}
 
-        raw_artifacts = payload.get("artifacts", [])
-        artifacts: list[dict[str, Any]] = []
-        if isinstance(raw_artifacts, list):
-            artifacts = [item for item in raw_artifacts if isinstance(item, dict)]
+    # Fields redundant with top-level AgentResult fields or internal to Docker containers.
+    _STRIP_FROM_DATA = {"ok", "error", "artifacts", "file_path", "csv_path"}
 
-        parsed = AgentResult(
-            ok=bool(payload.get("ok", False)),
-            run_id=run_id,
-            session_id=session_id,
-            summary=payload.get("summary"),
-            data=result_data,
-            artifacts=self._build_artifacts(
-                artifacts,
-                auth_token=self._config.oneprompt_api_key or None,
-                base_url=self._config.oneprompt_api_url,
-            ),
-            error=None,
-        )
-        if not parsed.ok and not parsed.error:
-            parsed.error = str(payload.get("error") or "Cloud request failed")
-        if parsed.session_id:
-            self._default_session_id = parsed.session_id
-        return parsed
-
-    @staticmethod
-    def _first_artifact_id(data_from: Optional[AgentResult]) -> Optional[str]:
-        """Return the first artifact ID from a result if available."""
-        if not data_from:
-            return None
-        for artifact in data_from.artifacts:
-            if artifact.id:
-                return artifact.id
-        return None
-
-    def _parse_result(self, result_json: str, run_id: str, session_id: str) -> AgentResult:
+    def _parse_result(
+        self,
+        result_json: str,
+        run_id: str,
+        session_id: str,
+        metrics: Optional[RunMetrics] = None,
+    ) -> AgentResult:
         """Parse agent JSON response into AgentResult."""
         data = json.loads(result_json)
         raw_artifacts = data.get("artifacts", [])
@@ -381,17 +267,20 @@ class Client:
         if isinstance(raw_artifacts, list):
             parsed_artifacts = [item for item in raw_artifacts if isinstance(item, dict)]
 
+        clean_data = {k: v for k, v in data.items() if k not in self._STRIP_FROM_DATA}
+
         return AgentResult(
             ok=data.get("ok", False),
             run_id=run_id,
             session_id=session_id,
             summary=data.get("summary") or data.get("name"),
-            data=data,
+            data=clean_data,
             artifacts=self._build_artifacts(
                 parsed_artifacts,
                 auth_token=self._config.artifact_store_token or None,
                 base_url=self._config.artifact_store_url,
             ),
+            metrics=metrics,
             error=str(data["error"]) if data.get("error") else None,
         )
 
@@ -408,12 +297,44 @@ class Client:
                     continue
         return None
 
+    def _format_local_agent_error(
+        self,
+        *,
+        action: str,
+        exc: Exception,
+        mcp_url: str,
+        service_name: str,
+    ) -> str:
+        """Render concise, actionable error messages for local MCP failures."""
+        leaves = _iter_leaf_exceptions(exc)
+        if any(_is_mcp_connect_error(item) for item in leaves):
+            return (
+                f"{action} failed: cannot connect to {service_name} at {mcp_url}. "
+                "Run `op start` and confirm the container is Up."
+            )
+
+        details: list[str] = []
+        seen: set[str] = set()
+        for item in leaves[:3]:
+            msg = str(item).strip() or item.__class__.__name__
+            rendered = f"{item.__class__.__name__}: {msg}"
+            if rendered not in seen:
+                details.append(rendered)
+                seen.add(rendered)
+
+        if details:
+            return f"{action} failed: {' | '.join(details)}"
+        return f"{action} failed: {exc}"
+
     # ---- Public API ----
 
     def query(
         self,
         question: str,
         session_id: Optional[str] = None,
+        dataset_id: Optional[str] = None,
+        database_url: Optional[str] = None,
+        schema_docs: Optional[str] = None,
     ) -> AgentResult:
         """
         Query your database using natural language.
@@ -421,6 +342,10 @@ class Client:
         Args:
             question: Natural language question about your data.
             session_id: Optional session ID for isolation.
+            dataset_id: Cloud mode only. Identifier of a stored dataset.
+            database_url: Optional PostgreSQL DSN override.
+                In cloud mode this enables ephemeral (non-persistent) credentials.
+            schema_docs: Optional schema docs override. Used with ``database_url``.
 
         Returns:
             AgentResult with query results, preview data, and artifacts.
@@ -430,32 +355,66 @@ class Client:
             >>> for row in result.preview:
             ...     print(row)
         """
-        return asyncio.run(self._query_async(question, session_id))
+        if self._is_cloud_mode and self._cloud_client is not None:
+            return self._cloud_client.query(
+                question,
+                session_id=session_id,
+                dataset_id=dataset_id,
+                database_url=database_url,
+                schema_docs=schema_docs,
+            )
+        return asyncio.run(
+            self._query_async(
+                question,
+                session_id=session_id,
+                dataset_id=dataset_id,
+                database_url=database_url,
+                schema_docs=schema_docs,
+            )
+        )
 
-    async def _query_async(self, question: str, session_id: Optional[str] = None) -> AgentResult:
+    async def _query_async(
+        self,
+        question: str,
+        session_id: Optional[str] = None,
+        dataset_id: Optional[str] = None,
+        database_url: Optional[str] = None,
+        schema_docs: Optional[str] = None,
+    ) -> AgentResult:
         if self._is_cloud_mode:
-            payload: dict[str, Any] = {"query": question}
-            if session_id:
-                payload["session_id"] = session_id
-            try:
-                response = await self._cloud_post("/agents/data", payload)
-                return self._parse_cloud_result(response)
-            except Exception as exc:
+            if self._cloud_client is None:
                 return AgentResult(
                     ok=False,
                     run_id=uuid.uuid4().hex,
                     session_id=session_id or "",
-                    error=f"Cloud query failed: {exc}",
+                    error="Cloud client is not initialized.",
                 )
+            return await self._cloud_client._query_async(
+                question,
+                session_id=session_id,
+                dataset_id=dataset_id,
+                database_url=database_url,
+                schema_docs=schema_docs,
+            )
 
         sid = session_id or self._get_session_id()
+        if dataset_id:
+            return AgentResult(
+                ok=False,
+                run_id=uuid.uuid4().hex,
+                session_id=sid,
+                error="dataset_id is only supported in cloud mode.",
+            )
+
         run_id = uuid.uuid4().hex
         self._state.create_run(run_id, sid)
         context = self._build_context(sid, run_id)
 
+        query_dsn = (database_url or "").strip() or self._config.database_url
+        query_schema_docs = self._config.schema_docs if schema_docs is None else schema_docs
         dataset_config = {
-            "dsn": self._config.database_url,
-            "schema_docs": self._config.schema_docs,
+            "dsn": query_dsn,
+            "schema_docs": query_schema_docs,
             "name": "default",
             "id": "default",
         }
@@ -463,17 +422,24 @@ class Client:
         from oneprompt.agents import data_agent
 
         try:
-            result_json = await data_agent.run(question, context, dataset_config=dataset_config)
+            result_json, metrics = await data_agent.run(
+                question, context, dataset_config=dataset_config
+            )
         except Exception as exc:
             self._state.update_run_status(run_id, "failed")
             return AgentResult(
                 ok=False,
                 run_id=run_id,
                 session_id=sid,
-                error=f"Query failed: {exc}",
+                error=self._format_local_agent_error(
+                    action="Query",
+                    exc=exc,
+                    mcp_url=self._config.mcp_postgres_url,
+                    service_name="postgres-mcp",
+                ),
             )
         self._state.update_run_status(run_id, "completed")
-        return self._parse_result(result_json, run_id, sid)
+        return self._parse_result(result_json, run_id, sid, metrics=metrics)
 
     def chart(
         self,
@@ -498,6 +464,13 @@ class Client:
             >>> data = client.query("Revenue by month")
             >>> chart = client.chart("Bar chart of revenue trends", data_from=data)
         """
+        if self._is_cloud_mode and self._cloud_client is not None:
+            return self._cloud_client.chart(
+                question,
+                data_from=data_from,
+                data_preview=data_preview,
+                session_id=session_id,
+            )
         return asyncio.run(self._chart_async(question, data_from, data_preview, session_id))
 
     async def _chart_async(
@@ -508,29 +481,19 @@ class Client:
         session_id: Optional[str] = None,
     ) -> AgentResult:
         if self._is_cloud_mode:
-            payload: dict[str, Any] = {"question": question}
-            sid = session_id or (data_from.session_id if data_from else None)
-            if sid:
-                payload["session_id"] = sid
-
-            data_artifact_id = self._first_artifact_id(data_from)
-            if data_artifact_id:
-                payload["data_artifact_id"] = data_artifact_id
-            elif data_preview:
-                payload["data_preview"] = data_preview
-            elif data_from and data_from.preview:
-                payload["data_preview"] = json.dumps(data_from.preview)
-
-            try:
-                response = await self._cloud_post("/agents/chart", payload)
-                return self._parse_cloud_result(response)
-            except Exception as exc:
+            if self._cloud_client is None:
                 return AgentResult(
                     ok=False,
                     run_id=uuid.uuid4().hex,
-                    session_id=sid or "",
-                    error=f"Cloud chart generation failed: {exc}",
+                    session_id=session_id or "",
+                    error="Cloud client is not initialized.",
                 )
+            return await self._cloud_client._chart_async(
+                question,
+                data_from=data_from,
+                data_preview=data_preview,
+                session_id=session_id,
+            )
 
         sid = session_id or self._get_session_id()
         run_id = uuid.uuid4().hex
@@ -538,28 +501,48 @@ class Client:
         context = self._build_context(sid, run_id)
 
         msg = question.strip()
-        inline_data = self._read_artifact_data(data_from)
-        if inline_data is not None:
-            msg += f"\nDATA_INLINE: {inline_data}"
+
+        # Pass artifact URL to the chart MCP so it fetches data directly —
+        # the LLM must never see the full dataset, only a small preview.
+        # Prefer JSON (chart MCP expects records format); fall back to CSV.
+        chart_data_url: Optional[str] = None
+        if data_from and data_from.artifacts:
+            _csv_url: Optional[str] = None
+            for art in data_from.artifacts:
+                if art.url:
+                    if art.name.endswith(".json") and chart_data_url is None:
+                        chart_data_url = art.url
+                    elif art.name.endswith(".csv") and _csv_url is None:
+                        _csv_url = art.url
+            if chart_data_url is None:
+                chart_data_url = _csv_url  # fallback to CSV if no JSON artifact
+
+        # Show only a small preview so the LLM understands column structure
+        if data_from and data_from.preview:
+            preview_rows = data_from.preview[:5]
+            msg += f"\npreview:\n{json.dumps(preview_rows, ensure_ascii=False)}"
         elif data_preview:
             msg += f"\npreview:\n{data_preview}"
-        elif data_from and data_from.preview:
-            msg += f"\nDATA_INLINE: {json.dumps(data_from.preview)}"
 
         from oneprompt.agents import chart_agent
 
         try:
-            result_json = await chart_agent.run(msg, context)
+            result_json, metrics = await chart_agent.run(msg, context, data_url=chart_data_url)
         except Exception as exc:
             self._state.update_run_status(run_id, "failed")
             return AgentResult(
                 ok=False,
                 run_id=run_id,
                 session_id=sid,
-                error=f"Chart generation failed: {exc}",
+                error=self._format_local_agent_error(
+                    action="Chart generation",
+                    exc=exc,
+                    mcp_url=self._config.mcp_chart_url,
+                    service_name="chart-mcp",
+                ),
             )
         self._state.update_run_status(run_id, "completed")
-        return self._parse_result(result_json, run_id, sid)
+        return self._parse_result(result_json, run_id, sid, metrics=metrics)
 
     def analyze(
         self,
@@ -585,6 +568,13 @@ class Client:
             >>> analysis = client.analyze("Calculate monthly growth rate", data_from=data)
             >>> print(analysis.summary)
         """
+        if self._is_cloud_mode and self._cloud_client is not None:
+            return self._cloud_client.analyze(
+                instruction,
+                data_from=data_from,
+                output_name=output_name,
+                session_id=session_id,
+            )
         return asyncio.run(self._analyze_async(instruction, data_from, output_name, session_id))
 
     async def _analyze_async(
@@ -595,28 +585,19 @@ class Client:
         session_id: Optional[str] = None,
     ) -> AgentResult:
         if self._is_cloud_mode:
-            payload: dict[str, Any] = {
-                "instruction": instruction,
-                "output_name": output_name,
-            }
-            sid = session_id or (data_from.session_id if data_from else None)
-            if sid:
-                payload["session_id"] = sid
-
-            data_artifact_id = self._first_artifact_id(data_from)
-            if data_artifact_id:
-                payload["data_artifact_id"] = data_artifact_id
-
-            try:
-                response = await self._cloud_post("/agents/python", payload)
-                return self._parse_cloud_result(response)
-            except Exception as exc:
+            if self._cloud_client is None:
                 return AgentResult(
                     ok=False,
                     run_id=uuid.uuid4().hex,
-                    session_id=sid or "",
-                    error=f"Cloud analysis failed: {exc}",
+                    session_id=session_id or "",
+                    error="Cloud client is not initialized.",
                 )
+            return await self._cloud_client._analyze_async(
+                instruction,
+                data_from=data_from,
+                output_name=output_name,
+                session_id=session_id,
+            )
 
         sid = session_id or self._get_session_id()
         run_id = uuid.uuid4().hex
@@ -624,26 +605,51 @@ class Client:
         context = self._build_context(sid, run_id)
 
         msg = instruction.strip()
-        inline_data = self._read_artifact_data(data_from)
-        if inline_data is not None:
-            msg += f"\nDATA_INLINE: {inline_data}"
-        elif data_from and data_from.preview:
-            msg += f"\nDATA_INLINE: {json.dumps(data_from.preview)}"
+
+        # Prefer CSV for pandas; extract relative path so python_agent wires up DATA_URL.
+        # The LLM must never receive the full dataset — only a small structural preview.
+        artifact_data_path: Optional[str] = None
+        if data_from and data_from.artifacts:
+            _json_path: Optional[str] = None
+            for art in data_from.artifacts:
+                if not art.url:
+                    continue
+                # Strip /artifacts/{session_id}/ prefix to get path relative to session
+                prefix = f"/artifacts/{data_from.session_id}/"
+                rel = art.url[len(prefix):] if art.url.startswith(prefix) else art.url.lstrip("/")
+                if art.name.endswith(".csv") and artifact_data_path is None:
+                    artifact_data_path = rel  # prefer CSV for pandas
+                elif art.name.endswith(".json") and _json_path is None:
+                    _json_path = rel
+            if artifact_data_path is None:
+                artifact_data_path = _json_path  # fallback to JSON
+
+        # Show a small structural preview so the LLM understands column names/types
+        if data_from and data_from.preview:
+            preview_rows = data_from.preview[:5]
+            msg += f"\npreview:\n{json.dumps(preview_rows, ensure_ascii=False)}"
 
         from oneprompt.agents import python_agent
 
         try:
-            result_json = await python_agent.run(msg, context, output_name=output_name)
+            result_json, metrics = await python_agent.run(
+                msg, context, data_path=artifact_data_path, output_name=output_name
+            )
         except Exception as exc:
             self._state.update_run_status(run_id, "failed")
             return AgentResult(
                 ok=False,
                 run_id=run_id,
                 session_id=sid,
-                error=f"Analysis failed: {exc}",
+                error=self._format_local_agent_error(
+                    action="Analysis",
+                    exc=exc,
+                    mcp_url=self._config.mcp_python_url,
+                    service_name="python-mcp",
+                ),
             )
         self._state.update_run_status(run_id, "completed")
-        return self._parse_result(result_json, run_id, sid)
+        return self._parse_result(result_json, run_id, sid, metrics=metrics)
 
     @property
     def config(self) -> Config:

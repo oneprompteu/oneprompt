@@ -11,5 +11,6 @@ Quick start:
 from oneprompt._version import __version__
 from oneprompt.client import Client
 from oneprompt.config import Config
+from oneprompt_sdk.types import ArtifactRef, AgentResult, RunMetrics
 
-__all__ = ["Client", "Config", "__version__"]
+__all__ = ["Client", "Config", "AgentResult", "ArtifactRef", "RunMetrics", "__version__"]

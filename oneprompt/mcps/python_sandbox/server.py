@@ -47,6 +47,38 @@ def _get_session_id_from_context() -> str | None:
         return None
 
 
+def _require_mcp_auth() -> None:
+    """
+    Enforce internal service authentication when MCP_AUTH_TOKEN is configured.
+
+    Local mode remains compatible when no token is configured.
+    """
+    expected = (os.getenv("MCP_AUTH_TOKEN") or os.getenv("MCP_SHARED_TOKEN") or "").strip()
+    if not expected:
+        return
+
+    presented = None
+    try:
+        from fastmcp.server.dependencies import get_context
+
+        ctx = get_context()
+        request_ctx = getattr(ctx, "request_context", None)
+        if request_ctx:
+            request = getattr(request_ctx, "request", None)
+            if request and hasattr(request, "headers"):
+                headers = request.headers
+                presented = headers.get("x-mcp-auth")
+                if not presented:
+                    auth_header = headers.get("authorization", "")
+                    if auth_header.lower().startswith("bearer "):
+                        presented = auth_header[7:].strip()
+    except Exception:
+        presented = None
+
+    if presented != expected:
+        raise PermissionError("Unauthorized MCP request")
+
+
 def _get_run_id_from_context() -> str | None:
     """
     Extract run_id from the MCP request context.
@@ -132,6 +164,18 @@ def run_python(
         upload_dataframe("results/summary.csv", summary.reset_index())
         ```
     """
+    try:
+        _require_mcp_auth()
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": {
+                "tool": "run_python",
+                "kind": "auth_error",
+                "message": str(exc),
+            },
+        }
+
     session_id = _get_session_id_from_context()
     run_id = _get_run_id_from_context()
     return execute_code_safely(code, timeout=timeout, session_id=session_id, run_id=run_id)
@@ -144,6 +188,18 @@ def list_available_libraries() -> Dict[str, Any]:
     
     Returns information about installed libraries and their versions.
     """
+    try:
+        _require_mcp_auth()
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": {
+                "tool": "list_available_libraries",
+                "kind": "auth_error",
+                "message": str(exc),
+            },
+        }
+
     libraries: Dict[str, Any] = {}
     
     # Check each library

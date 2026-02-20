@@ -2,9 +2,10 @@ FROM python:3.13-slim
 
 WORKDIR /app
 COPY oneprompt/mcps/postgres_mcp.py .
+COPY oneprompt/services/dataset_token.py /app/dataset_token.py
 COPY oneprompt/mcps/resources/ /app/resources/
 
-RUN pip install --no-cache-dir fastmcp psycopg2-binary pandas pyarrow httpx
+RUN pip install --no-cache-dir fastmcp psycopg2-binary pandas pyarrow httpx cryptography
 
 ENV PYTHONUNBUFFERED=1
 ENV POSTGRES_DSN=""

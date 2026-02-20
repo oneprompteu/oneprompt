@@ -42,6 +42,44 @@ ChartData = Union[str, List[Dict[str, Any]], Dict[str, Any]]
 # Utils
 # ---------------------------
 
+
+def _expected_mcp_auth_token() -> Optional[str]:
+    token = (os.getenv("MCP_AUTH_TOKEN") or os.getenv("MCP_SHARED_TOKEN") or "").strip()
+    return token or None
+
+
+def _require_mcp_auth() -> None:
+    """
+    Enforce internal service authentication when MCP_AUTH_TOKEN is configured.
+
+    Local mode remains compatible when no token is configured.
+    """
+    expected = _expected_mcp_auth_token()
+    if not expected:
+        return
+
+    presented = None
+    try:
+        from fastmcp.server.dependencies import get_context
+
+        ctx = get_context()
+        request_ctx = getattr(ctx, "request_context", None)
+        if request_ctx:
+            request = getattr(request_ctx, "request", None)
+            if request and hasattr(request, "headers"):
+                headers = request.headers
+                presented = headers.get("x-mcp-auth")
+                if not presented:
+                    auth_header = headers.get("authorization", "")
+                    if auth_header.lower().startswith("bearer "):
+                        presented = auth_header[7:].strip()
+    except Exception:
+        presented = None
+
+    if presented != expected:
+        raise PermissionError("Unauthorized MCP request")
+
+
 def _safe_name(name: Optional[str], tool: str) -> str:
     if name:
         base = os.path.basename(name)
@@ -178,11 +216,33 @@ def _parse_csv_to_records(text: str) -> List[Dict[str, Any]]:
 
 
 def _load_data(value: Any) -> Any:
-    """Load data from inline value, URL (JSON/CSV), or local file."""
+    """Load data from inline value, URL (JSON/CSV), artifact path, or local file."""
+    _require_mcp_auth()
+
     if not isinstance(value, str):
         return value
 
-    # Handle URLs
+    # Handle relative artifact store paths like /artifacts/{session_id}/...
+    if value.startswith("/artifacts/"):
+        base_url, token = _artifact_store_config()
+        if not base_url:
+            raise FileNotFoundError(
+                f"ARTIFACT_STORE_URL is not configured; cannot load artifact path: {value}"
+            )
+        full_url = f"{base_url.rstrip('/')}{value}"
+        headers: Dict[str, str] = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        with httpx.Client(timeout=30.0) as http_client:
+            resp = http_client.get(full_url, headers=headers)
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "")
+            is_csv = value.endswith(".csv") or "text/csv" in content_type
+            if is_csv:
+                return _parse_csv_to_records(resp.text)
+            return resp.json()
+
+    # Handle full HTTP/HTTPS URLs
     if value.startswith("http://") or value.startswith("https://"):
         _, token = _artifact_store_config()
         headers: Dict[str, str] = {}
@@ -241,6 +301,11 @@ def _write_export(tool: str, args: Dict[str, Any], file_name: Optional[str]) -> 
     
     Uses canonical path structure: {session_id}/runs/{run_id}/charts/{name}.json
     """
+    try:
+        _require_mcp_auth()
+    except Exception:
+        return {"ok": False, "error": "Unauthorized MCP request"}
+
     session_id = _get_session_id()
     run_id = _get_run_id()
     
